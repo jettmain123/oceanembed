@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+.env
+
+# Data + model artefacts are regenerated, never committed
+data/raw/
+data/processed/
+*.nc
+*.npz
+*.parquet
+*.pt
+outputs/*.png
+outputs/*.json
+.DS_Store

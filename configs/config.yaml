@@ -1,0 +1,66 @@
+# OceanEmbed configuration -- single source of truth for the pipeline.
+# Anything downstream reads these values via oceanembed.load_config().
+
+domain:
+  lat_min: 5.0
+  lat_max: 30.0
+  lon_min: 45.0
+  lon_max: 105.0
+  resolution: 0.25          # degrees, target grid
+  temporal: daily
+
+# Contract D -- the 15 standard depths from the problem statement (metres)
+depths: [0, 5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 300, 500, 700, 1000]
+
+# Contract A -- canonical surface variable names. NEVER rename.
+surface_vars: [sst, sss, sla, ucur, vcur, uwind, vwind]
+
+patch:
+  size: 9                   # N x N spatial patch around each cell
+  add_coords: true          # append lat, lon, sin(doy), cos(doy) channels
+
+model:
+  encoder: cnn              # cnn | vit
+  embed_dim: 128
+  head_hidden: 256
+  depth_attention: true
+  surface_skip: true       # feed the raw centre cell straight to the head
+  vit:
+    patch: 3                # tokenisation patch inside the NxN window
+    depth: 4                # transformer blocks
+    heads: 4
+
+train:
+  epochs: 15
+  batch_size: 256
+  lr: 8.0e-4
+  weight_decay: 1.0e-4
+  val_fraction: 0.15
+  seed: 42
+  # per-depth loss weights: up-weight the thermocline (50-300 m) where the
+  # signal is hardest and most scientifically interesting
+  depth_weights: [1.0, 1.0, 1.0, 1.1, 1.2, 1.5, 1.8, 2.0, 2.0, 2.0, 1.8, 1.5, 1.0, 0.8, 0.6]
+
+synthetic:
+  n_days: 120
+  start_date: "2021-01-01"
+  coarse_factor: 2          # synthetic cube is generated coarser, then regridded
+  seed: 7
+
+dataset:
+  max_samples_per_day: 400  # subsample ocean cells per day to keep memory sane
+  argo_fraction: 0.15       # fraction of days reserved as the ARGO-style holdout
+  seed: 42
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  outputs: outputs
+  synthetic_cube: data/raw/synthetic_cube.nc
+  harmonized: data/processed/harmonized.nc
+  dataset: data/processed/dataset.npz
+  samples_table: data/processed/samples.parquet
+  checkpoint: outputs/oceanembed.pt
+  checkpoint_npy: outputs/oceanembed_numpy.npz
+  scorecard: outputs/scorecard.json
+  baseline_scorecard: outputs/baseline_scorecard.json
