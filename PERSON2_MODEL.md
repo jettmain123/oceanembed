@@ -50,6 +50,33 @@ Otherwise you will finish four experiments and only have the last one.
 
 ---
 
+## READ THIS BEFORE YOU QUOTE ANY NUMBER
+
+The practice data is FAKE. It was generated from a formula that a human wrote,
+and then the model was trained to rediscover that formula. So of course it
+scores well - the answer was planted there on purpose.
+
+What good scores on fake data DO prove: the code runs, the shapes line up,
+training converges, evaluation works, the demo displays. That is real and worth
+having.
+
+What they DO NOT prove: anything about the actual Indian Ocean.
+
+**This affects Experiment 1 directly.** The fake ocean was deliberately built so
+that deep temperature depends on the NEIGHBOURING cells. So when patch 9 beats
+patch 1, part of that is just finding a signal that was planted. The experiment
+is still worth running now - it proves your measurement method works and gets
+your scripts ready - but the number that goes on the results slide must come
+from the real GLORYS data, where nobody planted anything.
+
+**Expect the real numbers to be worse.** Real oceans are messier than a formula.
+That is normal and expected. Do not panic when the correlation drops.
+
+Rule: run everything now on fake data, run it again on real data, report only
+the real one.
+
+---
+
 # EXPERIMENT 1 - the most important one
 
 **Question: does looking at neighbouring cells actually help?**
