@@ -237,5 +237,25 @@ works, then run the full thing once.
 **You changed patch size and got a shape error** - you forgot to re-run
 `02_build_dataset.py`. The squares are baked into the data file.
 
-**Using a computer with a GPU?** Training is currently locked to the CPU, so it
-will not go faster on its own. Ask for the fix - it is a small change.
+**Using a computer with an NVIDIA GPU?** Training now uses it automatically -
+but only if you installed the CUDA version of torch. Plain `pip install torch`
+gives a CPU-only build on Windows, which cannot see your GPU at all no matter
+what hardware you have.
+
+Check which one you have:
+
+```
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+If it prints something ending in `+cpu`, or `False`, install the CUDA build:
+
+```
+pip install torch==2.14.0+cu130 --index-url https://download.pytorch.org/whl/cu130
+```
+
+That is about a 3 GB download. If it fails partway with a connection error,
+just run it again - it picks up what it already downloaded.
+
+`03_train.py` prints which device it chose on every run, so you never have to
+guess. You can also force it with `--device cpu` or `--device cuda`.

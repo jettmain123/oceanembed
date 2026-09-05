@@ -30,6 +30,8 @@ def main() -> None:
     ap.add_argument("--backend", type=str, default="auto", choices=["auto", "torch", "numpy"])
     ap.add_argument("--batch-size", type=int, default=None)
     ap.add_argument("--lr", type=float, default=None)
+    ap.add_argument("--device", type=str, default="auto",
+                    help="auto | cpu | cuda | cuda:0 -- auto uses the GPU when one is usable")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -67,31 +69,55 @@ def main() -> None:
 
     if use_torch:
         import torch
-        from torch.utils.data import DataLoader, TensorDataset
 
         from oceanembed.model import build_model, weighted_mse
 
         torch.manual_seed(seed)
         np.random.seed(seed)
-        dev = torch.device("cpu")
+
+        # Pick the device: GPU when one is genuinely usable, else CPU. --device
+        # overrides. A CPU-only torch build reports no CUDA even on a GPU box,
+        # so say so loudly instead of silently training 30x slower.
+        if args.device == "auto":
+            dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            dev = torch.device(args.device)
+        if dev.type == "cuda":
+            torch.cuda.manual_seed_all(seed)
+            print(f"device: cuda -> {torch.cuda.get_device_name(0)} "
+                  f"({torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB)")
+        else:
+            note = ""
+            if not torch.cuda.is_available() and "+cpu" in torch.__version__:
+                note = "  (torch is a CPU-only build -- reinstall with CUDA to use a GPU)"
+            print(f"device: cpu{note}")
+
         model = build_model(cfg, in_ch=n_ch, n_depths=int(depths.size)).to(dev)
         n_par = sum(p.numel() for p in model.parameters())
         print(f"model: {cfg['model']['encoder']} encoder, {n_par:,} parameters")
 
-        tr_ds = TensorDataset(torch.from_numpy(trX), torch.from_numpy(trY))
-        va_x = torch.from_numpy(vaX)
-        va_y = torch.from_numpy(vaY)
-        dl = DataLoader(tr_ds, batch_size=batch, shuffle=True, num_workers=0, drop_last=False)
+        # The whole dataset is small (a few hundred MB), so keep it resident on
+        # the device and slice batches directly. That removes the per-batch host
+        # transfer and the DataLoader overhead, which dominate at this size.
+        tr_x = torch.from_numpy(trX).to(dev)
+        tr_y = torch.from_numpy(trY).to(dev)
+        va_x = torch.from_numpy(vaX).to(dev)
+        va_y = torch.from_numpy(vaY).to(dev)
+        wt = torch.from_numpy(w).to(dev)
+        n_train = tr_x.shape[0]
+
         opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
         sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs)
-        wt = torch.from_numpy(w)
 
         best, history = np.inf, []
         ckpt = resolve(cfg["paths"]["checkpoint"])
         for ep in range(1, epochs + 1):
             model.train()
             tot, seen = 0.0, 0
-            for xb, yb in dl:
+            perm = torch.randperm(n_train, device=dev)
+            for s in range(0, n_train, batch):
+                idx = perm[s:s + batch]
+                xb, yb = tr_x[idx], tr_y[idx]
                 opt.zero_grad(set_to_none=True)
                 loss = weighted_mse(model(xb), yb, wt)
                 loss.backward()
@@ -109,7 +135,7 @@ def main() -> None:
                 best = vl
                 torch.save(
                     {
-                        "state_dict": model.state_dict(),
+                        "state_dict": {k: v.detach().cpu() for k, v in model.state_dict().items()},
                         "cfg_model": cfg["model"], "patch": cfg["patch"],
                         "in_ch": n_ch, "n_depths": int(depths.size),
                         "xm": xm, "xs": xs, "ym": ym, "ys": ys, "depths": depths,
@@ -142,6 +168,7 @@ def main() -> None:
     dt = time.time() - t0
     (out_dir / "train_history.json").write_text(
         json.dumps({"backend": "torch" if use_torch else "numpy",
+                    "device": str(dev) if use_torch else "cpu",
                     "encoder": cfg["model"]["encoder"] if use_torch else "numpy_mlp",
                     "epochs": epochs, "best_val_loss": float(best),
                     "seconds": round(dt, 1), "history": history}, indent=2),

@@ -114,6 +114,11 @@ scripts/                  00..05 pipeline stages, plus the real-data variants
 - **GLORYS depth levels are interpolated** onto the 15 standard levels.
 - **Land and NaN are handled explicitly**: any sample whose patch or target
   contains a NaN is dropped, and the percent missing is reported.
+- **Training uses a GPU automatically** when one is available, and prints the
+  device it chose. Note that `pip install torch` gives a CPU-only build on
+  Windows; for an NVIDIA GPU install from the PyTorch CUDA index instead
+  (`--index-url https://download.pytorch.org/whl/cu130`). Override with
+  `--device cpu|cuda`.
 - **The NumPy fallback is real.** `backend.torch_available()` executes a matmul
   and a linear layer, so a torch that imports but is broken still falls back
   cleanly and the pipeline finishes.
