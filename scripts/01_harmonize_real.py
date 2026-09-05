@@ -128,6 +128,26 @@ def main() -> None:
     print("\nmissing (%% of ocean cells) -- record these in DATA_SOURCES.md:")
     for k, v in missing_report(ds, cfg).items():
         print(f"  {k:6s} {v:6.2f}%")
+
+    # Physical sanity check. If the depth interpolation went wrong (levels
+    # reversed, wrong units, bad fill values) it shows up here immediately:
+    # temperature must fall from a warm surface to a cold deep ocean.
+    print("\nbasin-mean temperature profile -- MUST decrease with depth:")
+    prof = ds["temp"].mean(dim=["time", "lat", "lon"], skipna=True)
+    zz = np.asarray(ds["depth"].values, dtype=float)
+    tt = np.asarray(prof.values, dtype=float)
+    for z, t in zip(zz, tt):
+        print(f"  {z:6.0f} m : {t:6.2f} degC")
+    finite = tt[np.isfinite(tt)]
+    if finite.size < 2:
+        print("\n  WARNING: profile is mostly NaN -- something is wrong upstream")
+    elif np.any(np.diff(finite) > 0.5):
+        print("\n  WARNING: temperature INCREASES with depth somewhere above.")
+        print("  Check the depth axis direction and units before training on this.")
+    else:
+        print(f"\n  OK: falls from {finite[0]:.1f} degC at the surface to "
+              f"{finite[-1]:.1f} degC at depth")
+
     print("\nnext: python scripts/02_build_dataset.py")
 
 
