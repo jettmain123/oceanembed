@@ -17,7 +17,16 @@ surface_vars: [sst, sss, sla, ucur, vcur, uwind, vwind]
 
 patch:
   size: 9                   # N x N spatial patch around each cell
-  add_coords: false          # append lat, lon, sin(doy), cos(doy) channels
+  add_coords: false
+  # Which coordinate channels to append, when add_coords is true.
+  #   lat_n/lon_n     let the model memorise a spatial climatology, which
+  #                   inflates scores with no surface inference behind them
+  #   sin_doy/cos_doy give it the season. MEASURED TO HURT on a record that does
+  #                   not cover a full year: training Jan-Aug and testing Sep-Oct
+  #                   makes the date an out-of-distribution input and skill vs
+  #                   climatology fell from +0.10 to -0.25. Turn these on once
+  #                   the record spans complete years.
+  coord_vars: [sin_doy, cos_doy]          # append lat, lon, sin(doy), cos(doy) channels
 
 model:
   encoder: cnn              # cnn | vit

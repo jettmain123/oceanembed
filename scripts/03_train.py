@@ -30,6 +30,7 @@ def main() -> None:
     ap.add_argument("--backend", type=str, default="auto", choices=["auto", "torch", "numpy"])
     ap.add_argument("--batch-size", type=int, default=None)
     ap.add_argument("--lr", type=float, default=None)
+    ap.add_argument("--weight-decay", type=float, default=None)
     ap.add_argument("--channel-dropout", type=float, default=None,
                     help="probability of blanking a whole input channel per sample. "
                          "Teaches the model to cope when a satellite is down or a "
@@ -48,7 +49,7 @@ def main() -> None:
     epochs = args.epochs or int(cfg["train"]["epochs"])
     batch = args.batch_size or int(cfg["train"]["batch_size"])
     lr = args.lr or float(cfg["train"]["lr"])
-    wd = float(cfg["train"]["weight_decay"])
+    wd = args.weight_decay if args.weight_decay is not None else float(cfg["train"]["weight_decay"])
     seed = args.seed if args.seed is not None else int(cfg["train"]["seed"])
     cdrop = (args.channel_dropout if args.channel_dropout is not None
              else float(cfg["train"].get("channel_dropout", 0.0)))

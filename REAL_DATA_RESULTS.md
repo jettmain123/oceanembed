@@ -128,3 +128,72 @@ python scripts/04_evaluate.py
 
 Run-to-run spread on real data is roughly +/-0.03 degC mean RMSE, wider than the
 +/-0.01 seen on synthetic. Quote your own `outputs/scorecard.json`.
+
+---
+
+# UPDATE: 10 months of 2022 (304 days)
+
+Laptop 1 collected 2022-01-01 to 2022-10-31 continuously -- 304 days, one
+consistent reprocessed stream. Trained on 219 days, held out the last 46.
+
+**The numbers got worse, and that is the point.**
+
+| | Oct 2024 (1 month) | 2022 Jan-Oct (10 months) |
+|---|---|---|
+| training days | 22 | 219 |
+| holdout | 5 days, same month | 46 days, an unseen season |
+| mean correlation | 0.868 | 0.800 |
+| mean RMSE | 0.646 degC | 0.952 degC |
+| thermocline RMSE | 0.881 | 1.265 |
+| **skill vs climatology** | **+0.246** | **+0.074** |
+
+## Why the drop is the honest number, not a regression
+
+In the October run, training ended 22 October and the holdout was 27-31 October.
+Five days later, same season, same monsoon phase. That is barely a generalisation
+test at all.
+
+With ten months, training covers January to early August and the holdout is
+mid-September to October. The model has to predict a **season it never saw**.
+That is the test that tells you whether the thing would work operationally, and
+it is much harder.
+
+**So the earlier +0.246 was optimistic.** Quote +0.07 to +0.10. It is the number
+that survives contact with an honest split.
+
+## What we tried, and what the data said
+
+**Longer training, less regularisation.** The old settings (40 epochs, weight
+decay 1e-2) were tuned for 22 days and badly underfit 219 -- validation loss was
+still falling at the last epoch. 150 epochs at weight decay 1e-3 lifted skill
+from +0.074 to +0.102 and took us from losing to the RandomForest to beating it
+slightly. Run-to-run spread is about +/-0.03, so treat those as the same
+ballpark.
+
+**Giving the model the date made it WORSE.** Adding sin/cos(day-of-year) dropped
+skill from +0.102 to **-0.246**. The reason is clean: training covers January to
+August, so the day-of-year values for September and October are inputs the model
+has never seen. Handing it the date turns the date into an out-of-distribution
+feature and it extrapolates badly.
+
+This flips once the record covers complete years. `patch.coord_vars` in the
+config keeps the switch, with the measurement written next to it.
+
+## What still holds
+
+- **Below 300 m the model remains worse than climatology** (-0.27 at 300 m,
+  -1.24 at 700 m). Ten times the data did not fix it. That increasingly looks
+  physical rather than a data-volume problem: over these timescales the surface
+  does not constrain the deep ocean, and no amount of satellite data will change
+  that.
+- **Above 200 m there is genuine skill**, +0.18 to +0.50, strongest at 125-150 m
+  in the thermocline where the interesting variability lives.
+- The RandomForest still wins in the **top 30 m**, where temperature is nearly
+  the surface value and a point model recovers it almost exactly.
+
+## What to collect next
+
+Full calendar years, not more of the same months. The single biggest remaining
+gap is that the model has never seen a November or December. Once training spans
+complete years, the seasonal-extrapolation problem above disappears and the
+day-of-year channels should start helping rather than hurting.

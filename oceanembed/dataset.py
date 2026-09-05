@@ -21,6 +21,8 @@ from . import load_config
 
 __all__ = [
     "channel_names",
+    "coord_vars",
+    "coord_planes",
     "extract_samples",
     "fit_scalers",
     "apply_scalers",
@@ -31,13 +33,49 @@ __all__ = [
 ]
 
 
+ALL_COORDS = ["lat_n", "lon_n", "sin_doy", "cos_doy"]
+
+
+def coord_vars(cfg: dict | None = None) -> list[str]:
+    """Which coordinate channels to append, in order.
+
+    Split out from a single on/off flag because the two kinds do very different
+    things. lat_n/lon_n let the model memorise a spatial climatology, which
+    inflates scores without any surface inference behind them. sin_doy/cos_doy
+    tell it what time of year it is, which is real physical context once the
+    record spans more than one season -- without them the model cannot tell
+    January from July.
+    """
+    cfg = cfg or load_config()
+    if not cfg["patch"].get("add_coords", True):
+        return []
+    return [c for c in cfg["patch"].get("coord_vars", ALL_COORDS) if c in ALL_COORDS]
+
+
+def coord_planes(cfg, names, lat_n, lon_n, doy, P):
+    """(n, k, P, P) constant planes for the requested coordinate channels.
+
+    lat_n/lon_n are per-sample arrays already normalised to [-1, 1]; doy is the
+    day of year for the sample's day.
+    """
+    n = len(lat_n)
+    out = np.empty((n, len(names), P, P), dtype=np.float32)
+    for j, nm in enumerate(names):
+        if nm == "lat_n":
+            out[:, j] = np.asarray(lat_n, np.float32)[:, None, None]
+        elif nm == "lon_n":
+            out[:, j] = np.asarray(lon_n, np.float32)[:, None, None]
+        elif nm == "sin_doy":
+            out[:, j] = np.float32(np.sin(2 * np.pi * doy / 365.25))
+        elif nm == "cos_doy":
+            out[:, j] = np.float32(np.cos(2 * np.pi * doy / 365.25))
+    return out
+
+
 def channel_names(cfg: dict | None = None) -> list[str]:
     """Ordered channel names of X. Keep this in sync with extract_samples."""
     cfg = cfg or load_config()
-    names = list(cfg["surface_vars"])
-    if cfg["patch"].get("add_coords", True):
-        names += ["lat_n", "lon_n", "sin_doy", "cos_doy"]
-    return names
+    return list(cfg["surface_vars"]) + coord_vars(cfg)
 
 
 def extract_samples(
@@ -56,7 +94,7 @@ def extract_samples(
     cfg = cfg or load_config()
     svars = list(cfg["surface_vars"])
     P = int(cfg["patch"]["size"])
-    add_coords = bool(cfg["patch"].get("add_coords", True))
+    cnames = coord_vars(cfg)
     half = P // 2
     if max_per_day is None:
         max_per_day = int(cfg["dataset"]["max_samples_per_day"])
@@ -81,8 +119,7 @@ def extract_samples(
         [float(np.datetime64(t, "D").astype("datetime64[D]").astype(object).timetuple().tm_yday) for t in times]
     )
 
-    n_surf = len(svars)
-    n_ch = n_surf + (4 if add_coords else 0)
+    n_ch = len(svars) + len(cnames)
 
     Xs, Ys, Ms = [], [], []
     kept, seen = 0, 0
@@ -110,12 +147,9 @@ def extract_samples(
         patches = np.moveaxis(patches, 0, 1).astype(np.float32)               # (n,C0,P,P)
         n = patches.shape[0]
 
-        if add_coords:
-            extra = np.empty((n, 4, P, P), dtype=np.float32)
-            extra[:, 0] = lat_n[iy + half][:, None, None]
-            extra[:, 1] = lon_n[ix + half][:, None, None]
-            extra[:, 2] = np.float32(np.sin(2 * np.pi * doy[it] / 365.25))
-            extra[:, 3] = np.float32(np.cos(2 * np.pi * doy[it] / 365.25))
+        if cnames:
+            extra = coord_planes(cfg, cnames, lat_n[iy + half], lon_n[ix + half],
+                                 doy[it], P)
             patches = np.concatenate([patches, extra], axis=1)
 
         y = tgt[:, iy + half, ix + half].T.astype(np.float32)                 # (n,nz)
