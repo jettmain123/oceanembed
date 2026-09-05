@@ -90,8 +90,21 @@ for `thetao` alone.
 ## Download everything -- one command
 
 ```
-bash scripts/download/laptop2.sh
+python scripts/download/collect.py --laptop 2
 ```
+
+**On Windows you must use this Python version, not the .sh one.** Typing `bash`
+in PowerShell launches WSL, which is a separate Linux system that cannot see
+your Windows virtual environment -- every download then fails with
+"command not found" and the run looks broken when it is only in the wrong place.
+The Python script runs in whichever Python you launch it with, so that cannot
+happen. It also works on macOS and Linux, so everyone can use it.
+
+It checks your logins before starting and tells you exactly what is missing,
+rather than failing six times with an empty file.
+
+The shell version still exists if you prefer it on macOS:
+`bash scripts/download/laptop2.sh`
 
 That is the whole job. For each of your months it downloads all six products,
 checks them, harmonizes them, verifies the profile decreases with depth, and
