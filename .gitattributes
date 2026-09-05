@@ -1,0 +1,10 @@
+# Shell scripts must keep LF endings. The collectors are on macOS; a CRLF
+# script fails there with a confusing ": command not found".
+*.sh text eol=lf
+*.py text eol=lf
+*.md text
+*.yaml text
+*.nc binary
+*.npz binary
+*.pt binary
+*.bin binary

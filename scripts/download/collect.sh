@@ -53,6 +53,11 @@ for M in "${MONTHS[@]}"; do
   echo "[$M] starting  ($(date '+%H:%M'))"
   echo "----------------------------------------------------------"
 
+  # Truncate the log. It is appended to below, and on a retry a stale
+  # "temperature INCREASES" warning from the previous attempt would otherwise
+  # reject a month that has since downloaded correctly.
+  : > "$LOG"
+
   # start each month from a clean slate, so a half-finished previous month
   # cannot leak into this one's harmonized cube
   rm -f data/raw/*/*.nc

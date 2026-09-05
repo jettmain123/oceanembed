@@ -20,6 +20,12 @@
 # internally consistent. There is no 0.25 degree GLORYS in the my stream --
 # 1/12 degree is the only choice, about 0.5 GB per month for thetao alone.
 
+# anchor to the repo root, so this works from anywhere
+cd "$(dirname "$0")/../.." || exit 1
+
+PY=python
+command -v python >/dev/null 2>&1 || PY=python3
+
 M="$1"
 if [ -z "$M" ]; then
   echo "Usage: bash scripts/download/download_month.sh YYYY-MM"
@@ -28,7 +34,7 @@ if [ -z "$M" ]; then
 fi
 
 # Last day of the month, so nobody has to remember February.
-LAST=$(python -c "
+LAST=$($PY -c "
 import calendar,sys
 y,m=sys.argv[1].split('-'); print(calendar.monthrange(int(y),int(m))[1])" "$M")
 
