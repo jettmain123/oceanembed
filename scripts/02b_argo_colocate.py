@@ -51,6 +51,9 @@ MAX_PROFILES = 20000                  # cap so the holdout stays a sane size
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--holdout-only", action="store_true",
+                    help="keep only ARGO observations that land on holdout days, so the "
+                         "surface patches were never seen in training")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -95,8 +98,52 @@ def main() -> None:
     gap_days = np.array([int(abs((model_t[j] - t) / np.timedelta64(1, "D"))) for t, j in zip(argo_t, nearest)])
     print(f"\nARGO times {argo_t.size}, matched to model days with median gap {np.median(gap_days):.0f} d")
 
+    # WHICH days matter, not just the gap. If an ARGO observation lands on a day
+    # the model TRAINED on, the surface patch it is scored with is one the model
+    # has already fitted -- the targets are still independent, but the score is
+    # optimistic and a reviewer can challenge it.
+    from oceanembed.dataset import split_train_val_argo
+
+    tr_d, va_d, ho_d = split_train_val_argo(model_t.size, cfg)
+    bucket_of = {}
+    for i in tr_d:
+        bucket_of[int(i)] = "TRAIN  <-- leakage risk"
+    for i in va_d:
+        bucket_of[int(i)] = "val    <-- leakage risk"
+    for i in ho_d:
+        bucket_of[int(i)] = "holdout (clean)"
+
+    print(f"\nmodel split: train days {tr_d.min()}-{tr_d.max()} | val {va_d.min()}-{va_d.max()} "
+          f"| holdout {ho_d.min()}-{ho_d.max()}")
+    print(f"\n{'ARGO date':>12} {'-> model day':>13} {'date':>12}   split")
+    print("-" * 62)
+    for t, j, g in zip(argo_t, nearest, gap_days):
+        print(f"{str(t):>12} {int(j):>13} {str(model_t[j]):>12}   {bucket_of.get(int(j), '?')} "
+              f"{'(gap %dd)' % g if g else ''}")
+
+    n_clean = int(np.isin(nearest, ho_d).sum())
+    print(f"\n{n_clean}/{argo_t.size} ARGO times fall on holdout days.")
+    if n_clean == 0:
+        print("\n  WARNING: every ARGO observation lands on a day the model trained or")
+        print("  validated on. The ARGO measurements themselves are still independent,")
+        print("  but the surface patches are not, so the score would flatter the model.")
+        print("  Options: (a) run with --holdout-only once you have ARGO covering the")
+        print("  last days, (b) report it explicitly as in-sample-surface validation,")
+        print("  or (c) rely on the chronological GLORYS holdout for the headline number.")
+    elif n_clean < argo_t.size:
+        print("  Use --holdout-only to keep just the clean ones.")
+
+    if args.holdout_only:
+        keep = np.isin(nearest, ho_d)
+        if not keep.any():
+            raise SystemExit("--holdout-only leaves no ARGO profiles; see the options above")
+        argo = argo.isel(time=np.nonzero(keep)[0])
+        argo_t = argo_t[keep]
+        nearest = nearest[keep]
+        print(f"\n--holdout-only: keeping {int(keep.sum())} of {keep.size} ARGO times")
+
     if args.dry_run:
-        print("dry run -- nothing written.")
+        print("\ndry run -- nothing written.")
         return
 
     from numpy.lib.stride_tricks import sliding_window_view
