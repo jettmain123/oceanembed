@@ -30,6 +30,7 @@ import numpy as np
 import xarray as xr
 
 from oceanembed import load_config, resolve
+from oceanembed.harmonize import to_datetime64
 from oceanembed.loaders import PRODUCT_VARS
 
 # folder -> which canonical fields we expect to pull out of it
@@ -70,11 +71,18 @@ def describe_time(ds, decoded):
     tname = coord_of(ds, ["time", "valid_time", "t"])
     if tname is None:
         return None, "no time coordinate"
-    vals = ds[tname].values
-    if not decoded or not np.issubdtype(np.asarray(vals).dtype, np.datetime64):
-        return None, f"time present but NOT decoded ({np.asarray(vals).dtype}) -- units attr may be missing"
+    vals = np.asarray(ds[tname].values)
+    note = ""
+    if not np.issubdtype(vals.dtype, np.datetime64):
+        # cftime objects (non-standard calendar) -- the pipeline coerces these,
+        # so accept them here too rather than calling the product unusable
+        try:
+            vals = to_datetime64(vals)
+            note = "  [cftime calendar -> coerced, same as the pipeline does]"
+        except Exception as exc:
+            return None, f"time present but undecodable ({vals.dtype}): {exc}"
     days = np.asarray(vals, dtype="datetime64[D]")
-    return days, f"{days.min()} .. {days.max()} ({np.unique(days).size} unique days)"
+    return days, f"{days.min()} .. {days.max()} ({np.unique(days).size} unique days){note}"
 
 
 def check_product(folder, canon_list, cfg, root):

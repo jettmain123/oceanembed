@@ -13,6 +13,7 @@ Everything downstream reads only that file. Both the synthetic path
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from . import load_config
@@ -20,6 +21,7 @@ from . import load_config
 __all__ = [
     "target_grid",
     "normalize_coords",
+    "to_datetime64",
     "kelvin_to_celsius",
     "regrid_to_target",
     "interp_to_depths",
@@ -38,6 +40,35 @@ def target_grid(cfg: dict | None = None):
     lat = np.arange(d["lat_min"], d["lat_max"] + 1e-6, res, dtype=np.float32)
     lon = np.arange(d["lon_min"], d["lon_max"] + 1e-6, res, dtype=np.float32)
     return lat, lon
+
+
+def to_datetime64(values) -> np.ndarray:
+    """Coerce any time axis to numpy datetime64.
+
+    Some products (OSCAR) declare a non-standard calendar, so xarray decodes
+    their time axis into cftime objects rather than datetime64. Those cannot be
+    aligned or compared against the datetime64 axes of every other product, so
+    the merge silently produces an empty intersection.
+
+    We read the calendar fields (year, month, day...) straight off each object.
+    The declared calendar is taken at face value for the DATE it displays, which
+    is what the daily filenames mean -- reinterpreting a Julian label as a real
+    Julian calendar would shift these dates by about 13 days.
+    """
+    vals = np.asarray(values)
+    if np.issubdtype(vals.dtype, np.datetime64):
+        return vals
+    out = []
+    for t in vals.ravel():
+        if hasattr(t, "year") and hasattr(t, "month") and hasattr(t, "day"):
+            out.append(np.datetime64(
+                f"{t.year:04d}-{t.month:02d}-{t.day:02d}"
+                f"T{getattr(t, 'hour', 0):02d}:{getattr(t, 'minute', 0):02d}"
+                f":{getattr(t, 'second', 0):02d}"
+            ))
+        else:
+            out.append(np.datetime64(pd.Timestamp(t)))
+    return np.asarray(out, dtype="datetime64[ns]").reshape(vals.shape)
 
 
 def normalize_coords(obj: xr.Dataset | xr.DataArray) -> xr.Dataset | xr.DataArray:
@@ -59,6 +90,13 @@ def normalize_coords(obj: xr.Dataset | xr.DataArray) -> xr.Dataset | xr.DataArra
             ren[name] = "depth"
     if ren:
         obj = obj.rename(ren)
+
+    # cftime -> datetime64, so products with odd calendars still align
+    if "time" in obj.coords and obj["time"].dtype == object:
+        try:
+            obj = obj.assign_coords(time=to_datetime64(obj["time"].values))
+        except Exception:
+            pass
 
     if "lon" in obj.coords:
         lon = obj["lon"].values
