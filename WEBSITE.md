@@ -21,22 +21,28 @@ model -> export script -> static data files -> web page
          (run once)       (a few MB)           (no backend)
 ```
 
-## The data format to export
+## The data format (BUILT -- `scripts/06_export_web.py`)
 
-Two artefacts per day, both small:
+One binary per day, and one index. Simpler than the PNG-per-depth idea this file
+originally specified: a single cube per day serves BOTH the map and the profile,
+so there is one fetch instead of hundreds of images.
 
-**1. Map layers -- one PNG per (day, depth).**
-Colour-map the 101 x 241 prediction field to a PNG. Roughly 10-20 KB each, so
-31 days x 15 depths is a few MB. The browser can display these directly as an
-image overlay; no client-side maths.
+**`day_NNN.bin`** -- uint16 `[2, 15, 101, 241]`, meaning `[prediction,
+reference]`. About 1.46 MB per day. The page fetches only the selected day, draws
+the chosen depth slice to a canvas, and reads the 15 values under a click
+straight out of the array already in memory.
 
-**2. Profile cube -- one binary file per day.**
-101 x 241 x 15 values as float16 = about 0.73 MB per day. Fetch only the day the
-user has selected. When they click a point, read the 15 values straight out of
-the array already in memory. Instant, no server round trip.
+uint16 with a scale/offset rather than float16, because `Uint16Array` exists in
+every browser and `Float16Array` does not. 0 is the missing-data sentinel, so
+NaN cells become transparent and the basemap shows through.
 
-Ship a small `index.json` listing available dates, depths, the lat/lon grid, and
-the headline metrics from `outputs/scorecard.json`.
+**`index.json`** -- dates, depths, grid corners, the encoding constants, and the
+headline metrics lifted from `outputs/scorecard.json`.
+
+```
+python scripts/06_export_web.py              # full export, ~45 MB for 31 days
+python scripts/06_export_web.py --index-only # refresh metrics only
+```
 
 ## What the page must show
 
@@ -79,15 +85,26 @@ No login, no user accounts, no database, no file upload, no "select your own
 region", no live model, no 3D globe. Every one of those is a demo-day failure
 mode in exchange for nothing a judge is scoring.
 
-## Suggested stack
+## Stack (BUILT -- `web/index.html`)
 
-Plain HTML + a chart library is entirely sufficient and the safest choice.
-If the person building it is fluent in React, Next.js static export is fine.
-Do not learn a new framework this week.
+MapLibre GL for the map, and nothing else. The profile chart is hand-built SVG
+and the temperature field is drawn to a canvas, so there is no chart library and
+no framework to break.
 
-- Charts: Chart.js or Plotly (both fine from a CDN)
-- Map: the PNG layers over a simple lat/lon canvas. A full mapping library
-  (Leaflet/Mapbox) is optional polish, not a requirement.
+**Basemap: Esri, not CARTO.** CARTO now stamps "API KEY REQUIRED" across every
+tile. Esri needs no key:
+
+- Dark: `Canvas/World_Dark_Gray_Base` + `World_Dark_Gray_Reference`
+- Bathymetry: `Ocean/World_Ocean_Base` + `World_Ocean_Reference`
+
+The bathymetry option is worth keeping. It shows the seafloor, which is exactly
+where GLORYS runs out of deep values and the model therefore has no profile to
+give -- the gaps in our map line up with the shelf, and that is easier to show
+than to explain.
+
+The field is a MapLibre `image` source updated in place, with land left
+transparent so coastlines and place names stay legible underneath. Labels are
+drawn ON TOP of the data layer, otherwise the basin becomes unreadable.
 
 ## Fallback, and when to build it
 
