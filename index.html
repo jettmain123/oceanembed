@@ -37,6 +37,9 @@
   .tabs button{background:none;border:1px solid var(--line);color:var(--dim);
     padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px}
   .tabs button.on{background:var(--accent);border-color:var(--accent);color:#04101f;font-weight:600}
+  button.toggle{background:none;border:1px solid var(--line);color:var(--dim);padding:6px 12px;
+    border-radius:6px;cursor:pointer;font:inherit;font-size:13.5px}
+  button.toggle.on{background:#12243a;border-color:var(--accent);color:var(--accent)}
   .readout{background:linear-gradient(180deg,#14263f,#0e1b2e);border:1px solid #24405f;
     border-radius:9px;padding:14px 16px;margin-bottom:13px}
   .readout .big{font-size:38px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
@@ -95,6 +98,7 @@
         <option value="dark">Dark</option>
         <option value="ocean">Bathymetry</option>
       </select>
+      <button id="d3" class="toggle">3D seafloor</button>
     </div>
     <div class="ctl">
       <label for="depth">Depth</label>
@@ -105,6 +109,11 @@
       <label for="date">Day</label>
       <input type="range" id="date" min="0" max="0" value="0">
       <span class="val" id="datev"></span>
+    </div>
+    <div class="ctl" id="exagrow" style="display:none">
+      <label for="exag">Relief</label>
+      <input type="range" id="exag" min="1" max="60" value="18">
+      <span class="val" id="exagv">18x</span>
     </div>
     <div class="ctl">
       <label for="opac">Opacity</label>
@@ -315,7 +324,15 @@ function initMap(){
         base:{type:"raster",tiles:[BASEMAPS.dark.base],tileSize:256,attribution:ESRI_ATTR},
         baseref:{type:"raster",tiles:[BASEMAPS.dark.ref],tileSize:256},
         field:{type:"image",url:renderCanvas(),
-               coordinates:[[W,N],[E,N],[E,S],[W,S]]}
+               coordinates:[[W,N],[E,N],[E,S],[W,S]]},
+        // Terrarium DEM: free, no key, and it carries BATHYMETRY -- elevations
+        // below sea level -- so the shelf and the deep basin are real geometry.
+        // That matters here, because the shelf is exactly where GLORYS runs out
+        // of deep water and our coverage stops.
+        dem:{type:"raster-dem",
+             tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+             encoding:"terrarium", tileSize:256, maxzoom:12,
+             attribution:"Elevation: Mapzen / AWS Terrain Tiles, GEBCO, SRTM"}
       },
       layers:[
         {id:"base",type:"raster",source:"base"},
@@ -323,9 +340,12 @@ function initMap(){
          paint:{"raster-opacity":+$("opac").value/100,"raster-resampling":"nearest"}},
         // place names sit ON TOP of the data so the basin stays readable
         {id:"baseref",type:"raster",source:"baseref",paint:{"raster-opacity":0.9}}
-      ]
+      ],
+      sky:{"sky-color":"#0a1524","horizon-color":"#12243a","fog-color":"#080d16",
+           "sky-horizon-blend":0.6,"horizon-fog-blend":0.5,"fog-ground-blend":0.2}
     },
-    bounds:[[45,5],[105,30]], fitBoundsOptions:{padding:12}, attributionControl:{compact:true}
+    bounds:[[45,5],[105,30]], fitBoundsOptions:{padding:12},
+    attributionControl:{compact:true}, maxPitch:80
   });
   map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
   map.on("load",()=>{
@@ -340,6 +360,24 @@ function initMap(){
     pick=[y,x]; drawProfile(); readout(); marker();
   });
   map.getCanvas().style.cursor="crosshair";
+
+  let is3d=false;
+  $("d3").onclick=()=>{
+    is3d=!is3d;
+    $("d3").classList.toggle("on", is3d);
+    $("exagrow").style.display = is3d ? "flex" : "none";
+    if(is3d){
+      map.setTerrain({source:"dem", exaggeration:+$("exag").value});
+      map.easeTo({pitch:62, bearing:-18, duration:900});
+    }else{
+      map.setTerrain(null);
+      map.easeTo({pitch:0, bearing:0, duration:700});
+    }
+  };
+  $("exag").oninput=e=>{
+    $("exagv").textContent=e.target.value+"x";
+    if(is3d) map.setTerrain({source:"dem", exaggeration:+e.target.value});
+  };
 }
 
 let mk=null;
