@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OceanEmbed</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.6.0/maplibre-gl.css">
+<style>
+  :root{
+    --bg:#080d16; --panel:#101a2b; --line:#1e2b42;
+    --ink:#e8eef7; --dim:#8fa3bf; --accent:#4da3ff; --warn:#ffb454;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{padding:22px 30px 16px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:25px;letter-spacing:-.02em}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--dim);margin-top:5px;max-width:78ch;font-size:14px}
+  main{padding:20px 30px 50px;max-width:1500px}
+  .row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px}
+  @media(max-width:1080px){.row{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px 17px}
+  .card h2{margin:0 0 11px;font-size:13px;font-weight:600;letter-spacing:.05em;color:var(--dim);
+           text-transform:uppercase}
+  #map{width:100%;height:460px;border-radius:8px;overflow:hidden;background:#060a12}
+  .maplibregl-ctrl-attrib{font-size:10px}
+  .bar-row{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--dim)}
+  .bar{height:10px;flex:1;border-radius:3px}
+  .ctl{display:flex;align-items:center;gap:11px;margin-top:11px;flex-wrap:wrap}
+  .ctl label{color:var(--dim);min-width:60px;font-size:13px}
+  input[type=range]{flex:1;min-width:140px;accent-color:var(--accent)}
+  .val{font-variant-numeric:tabular-nums;min-width:100px;font-weight:600;font-size:14px}
+  select,input[type=date]{background:#0b1424;color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:6px 9px;font:inherit;font-size:13.5px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap}
+  .tabs button{background:none;border:1px solid var(--line);color:var(--dim);
+    padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#04101f;font-weight:600}
+  .readout{background:linear-gradient(180deg,#14263f,#0e1b2e);border:1px solid #24405f;
+    border-radius:9px;padding:14px 16px;margin-bottom:13px}
+  .readout .big{font-size:38px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
+  .readout .where{color:var(--dim);font-size:13px;margin-top:5px}
+  .readout .cmp{margin-top:9px;font-size:13px;display:flex;gap:16px;flex-wrap:wrap}
+  .readout .cmp b{font-variant-numeric:tabular-nums}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:11px}
+  .stat b{display:block;font-size:21px;font-variant-numeric:tabular-nums}
+  .stat small{color:var(--dim);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}
+  th,td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500}
+  th:first-child,td:first-child{text-align:left}
+  .pos{color:#5fd39b}.neg{color:#ff7b72}
+  .note{color:var(--dim);font-size:12.5px;margin-top:9px}
+  .warnbox{border-left:3px solid var(--warn);padding:10px 14px;margin-top:13px;
+           background:#191509;border-radius:0 6px 6px 0;font-size:13px}
+  footer{color:var(--dim);font-size:12.5px;padding:0 30px 40px;max-width:1500px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ocean<span>Embed</span> &mdash; subsurface temperature from satellites</h1>
+  <div class="sub">Temperature at 15 depths from 0 to 1000 m across the North Indian Ocean,
+    reconstructed from surface observations alone: SST, salinity, sea level, currents and wind.
+    <span id="domain"></span></div>
+</header>
+
+<main>
+<div class="row">
+  <div class="card">
+    <h2>Basin temperature</h2>
+    <div class="tabs" id="layers">
+      <button data-l="T" class="on">Temperature</button>
+      <button data-l="0">Cyclone heat (TCHP)</button>
+      <button data-l="1">26&deg;C isotherm</button>
+      <button data-l="2">Mixed layer</button>
+      <button data-l="3">Uncertainty</button>
+      <button data-l="4">RI risk</button>
+    </div>
+    <div class="tabs" id="modes" style="margin-top:7px">
+      <button data-m="0" class="on">Predicted</button>
+      <button data-m="1">Reference (GLORYS)</button>
+      <button data-m="2">Difference</button>
+    </div>
+    <div id="map" style="margin-top:11px"></div>
+    <div class="bar-row"><span id="lo"></span><div class="bar" id="cbar"></div><span id="hi"></span></div>
+
+    <div class="ctl">
+      <label for="region">Region</label>
+      <select id="region"></select>
+      <label for="datesel" style="min-width:auto">Date</label>
+      <input type="date" id="datesel">
+      <label for="basemap" style="min-width:auto">Basemap</label>
+      <select id="basemap">
+        <option value="dark">Dark</option>
+        <option value="ocean">Bathymetry</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <label for="depth">Depth</label>
+      <input type="range" id="depth" min="0" max="14" value="7">
+      <span class="val" id="depthv"></span>
+    </div>
+    <div class="ctl">
+      <label for="date">Day</label>
+      <input type="range" id="date" min="0" max="0" value="0">
+      <span class="val" id="datev"></span>
+    </div>
+    <div class="ctl">
+      <label for="opac">Opacity</label>
+      <input type="range" id="opac" min="20" max="100" value="88">
+      <span class="val" id="opacv">88%</span>
+    </div>
+    <div class="note">Click anywhere on the ocean to read the temperature and full profile there.</div>
+  </div>
+
+  <div class="card">
+    <h2>Temperature at the selected point</h2>
+    <div class="readout">
+      <div class="big" id="tval">--</div>
+      <div class="where" id="twhere"></div>
+      <div class="cmp" id="tcmp"></div>
+    </div>
+    <svg id="prof" viewBox="0 0 340 380" width="100%"></svg>
+    <div id="profmeta" class="note"></div>
+  </div>
+</div>
+
+<div class="row" style="margin-top:20px">
+  <div class="card">
+    <h2>Coastal segments near elevated risk &mdash; proof of concept</h2>
+    <div class="warnbox" style="margin-top:0;margin-bottom:12px">
+      <b>Decision support only.</b> This shows where the <b>ocean</b> could sustain rapid
+      intensification. It does <b>not</b> detect or forecast cyclones, knows nothing about
+      atmospheric conditions, and is <b>not an evacuation advisory</b>. These entries are
+      demonstration objects &mdash; nothing is transmitted and nothing is connected to any
+      alerting system.
+    </div>
+    <table id="alerts"></table>
+    <div class="note" id="alertnote"></div>
+  </div>
+
+  <div class="card">
+    <h2>Accuracy on held-out days</h2>
+    <div class="stats" id="stats"></div>
+    <table id="perdepth" style="margin-top:13px"></table>
+  </div>
+  <div class="card">
+    <h2>Where it works &mdash; and where it does not</h2>
+    <table id="clim"></table>
+    <div class="warnbox">
+      <b>Skill above climatology</b> compares the model against simply predicting the average
+      profile for that location, which needs no satellite data at all. Positive means the
+      surface observations genuinely add information.
+      <b>Below about 300 m it turns negative</b> &mdash; the surface stops constraining
+      temperature that deep, so we do not claim skill there. That is physics, not a defect,
+      and the range where it does work is the range that matters operationally: cyclone heat
+      content and the thermocline both sit in the upper 200 m.
+    </div>
+  </div>
+</div>
+</main>
+
+<footer>
+  Trained on GLORYS reanalysis, evaluated on days never seen in training.
+  Every value shown is precomputed &mdash; the page runs no model and needs no server.
+  Basemap tiles &copy; Esri, GEBCO, NOAA and contributors.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.6.0/maplibre-gl.js"></script>
+<script>
+// ---- colour ramps ----------------------------------------------------------
+const VIRIDIS=[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],
+  [31,158,137],[53,183,121],[109,205,89],[180,222,44],[253,231,37]];
+const HEATU=[[13,21,34],[40,60,90],[80,110,140],[150,160,120],[230,180,70],[255,120,60]];
+const RISKC=[[30,48,74],[70,110,150],[230,180,70],[255,90,70]];   // LOW WATCH ELEVATED HIGH
+const DIVERGE=[[33,102,172],[103,169,207],[209,229,240],[247,247,247],
+  [253,219,199],[239,138,98],[178,24,43]];
+function ramp(t,tbl){
+  t=Math.max(0,Math.min(1,t));
+  const x=t*(tbl.length-1), i=Math.floor(x), f=x-i;
+  const a=tbl[i], b=tbl[Math.min(i+1,tbl.length-1)];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+const cssRamp=t=>"linear-gradient(90deg,"+t.map(c=>`rgb(${c})`).join(",")+")";
+
+// Named seas, so you can jump to a place instead of hunting for it.
+// [west, south, east, north]
+const REGIONS=[
+  ["Full domain",        [45,5,105,30]],
+  ["Arabian Sea",        [55,8,78,25]],
+  ["Bay of Bengal",      [80,5,100,23]],
+  ["Andaman Sea",        [92,6,99,16]],
+  ["Laccadive Sea",      [70,5,79,14]],
+  ["Somali Basin",       [45,5,60,15]],
+  ["Gulf of Aden",       [45,10,53,15]],
+  ["Equatorial belt",    [45,5,105,10]],
+];
+
+// Esri tiles need no API key. Ocean Base carries bathymetry, which is worth
+// showing here: the shelf is exactly where GLORYS has no deep values and the
+// model therefore has no profile to give.
+const ESRI="https://services.arcgisonline.com/ArcGIS/rest/services";
+const ESRI_ATTR='Tiles &copy; Esri &mdash; GEBCO, NOAA, Garmin, HERE, Geonames.org';
+const BASEMAPS={
+  dark:{base:ESRI+"/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        ref: ESRI+"/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"},
+  ocean:{base:ESRI+"/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
+         ref: ESRI+"/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}"},
+};
+
+let IX=null, DAY=null, PROD=null, dayIdx=-1, mode=0, layer='T', pick=null, map=null, ready=false;
+let cv=document.createElement("canvas"), lastLo=0, lastHi=1;
+const $=id=>document.getElementById(id);
+
+function val(which,z,y,x){
+  const [nz,ny,nx]=IX.shape;
+  if(y<0||x<0||y>=ny||x>=nx) return NaN;
+  const q=DAY[which*nz*ny*nx + z*ny*nx + y*nx + x];
+  return q===0?NaN:IX.encoding.t_min+(q-1)*IX.encoding.scale;
+}
+function pval(which,k,y,x){
+  const [nz,ny,nx]=IX.shape;
+  const v=PROD[which*3*ny*nx + k*ny*nx + y*nx + x];
+  return Number.isFinite(v)?v:NaN;
+}
+// grid <-> geography. lat[0] is the SOUTH edge.
+const latOf=y=>IX.lat[0]+(IX.lat[1]-IX.lat[0])*y/(IX.shape[1]-1);
+const lonOf=x=>IX.lon[0]+(IX.lon[1]-IX.lon[0])*x/(IX.shape[2]-1);
+const yOf=la=>Math.round((la-IX.lat[0])/(IX.lat[1]-IX.lat[0])*(IX.shape[1]-1));
+const xOf=lo=>Math.round((lo-IX.lon[0])/(IX.lon[1]-IX.lon[0])*(IX.shape[2]-1));
+
+async function loadIndex(){
+  IX=await (await fetch("data/index.json")).json();
+  $("domain").textContent="Domain "+IX.domain+".";
+  const n=IX.dates.length;
+  $("date").max=n-1; $("date").value=n-1;
+  $("datesel").min=IX.dates[0]; $("datesel").max=IX.dates[n-1]; $("datesel").value=IX.dates[n-1];
+  $("region").innerHTML=REGIONS.map((r,i)=>`<option value="${i}">${r[0]}</option>`).join("");
+  cv.width=IX.shape[2]; cv.height=IX.shape[1];
+  buildStats(); buildPerDepth(); buildClim();
+  await loadDay(n-1);           // sets dayIdx, which buildAlerts needs
+  buildAlerts();
+  initMap();
+}
+
+async function loadDay(i){
+  if(i===dayIdx) return;
+  const buf=await (await fetch(`data/day_${String(i).padStart(3,"0")}.bin`)).arrayBuffer();
+  const off=IX.products.byte_offset;
+  DAY=new Uint16Array(buf,0,off/2);
+  PROD=new Float32Array(buf,off);          // [2,3,ny,nx] TCHP, D26, MLD
+  dayIdx=i;
+}
+
+// ---- render the field to a canvas, then hand it to MapLibre as an image -----
+function renderCanvas(){
+  const z=+$("depth").value, [nz,ny,nx]=IX.shape;
+  const ctx=cv.getContext("2d"), img=ctx.createImageData(nx,ny);
+  const buf=new Float32Array(ny*nx);
+  let lo=Infinity,hi=-Infinity;
+  const isT=(layer==="T"), k=isT?0:+layer;
+  const get=(w,y,x)=>isT?val(w,z,y,x):pval(w,k,y,x);
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    let v;
+    if(mode===2){ v=get(0,y,x)-get(1,y,x); } else v=get(mode,y,x);
+    buf[y*nx+x]=v;
+    if(isFinite(v)){ if(v<lo)lo=v; if(v>hi)hi=v; }
+  }
+  if(!isFinite(lo)){ lo=0; hi=1; }
+  if(mode===2){ const m=Math.max(Math.abs(lo),Math.abs(hi))||1; lo=-m; hi=m; }
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    // canvas row 0 must be the NORTH edge; lat index 0 is the south
+    const v=buf[y*nx+x], o=((ny-1-y)*nx+x)*4;
+    if(!isFinite(v)){ img.data[o+3]=0; continue; }   // transparent: basemap shows through
+    let c;
+    if(mode!==2 && layer==="4") c=RISKC[Math.max(0,Math.min(3,Math.round(v)))];
+    else if(mode!==2 && layer==="3") c=ramp((v-lo)/(hi-lo||1), HEATU);
+    else c=ramp((v-lo)/(hi-lo||1), mode===2?DIVERGE:VIRIDIS);
+    img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  lastLo=lo; lastHi=hi;
+  let u=(isT?" °C":" "+IX.products.units[k])+(mode===2?" diff":"");
+  if(!isT&&k===4&&mode!==2){ u=""; $("lo").textContent="LOW"; $("hi").textContent="HIGH"; }
+  if(!(!isT&&k===4&&mode!==2)){
+    $("lo").textContent=lo.toFixed(1)+u;
+    $("hi").textContent=hi.toFixed(1)+u;
+  }
+  $("cbar").style.background=cssRamp(
+      mode===2?DIVERGE: layer==="4"?RISKC : layer==="3"?HEATU : VIRIDIS);
+  $("depthv").textContent=IX.depths[z].toFixed(0)+" m";
+  $("datev").textContent=IX.dates[dayIdx];
+  return cv.toDataURL();
+}
+
+function refresh(){
+  if(!ready) return;
+  const url=renderCanvas();
+  map.getSource("field").updateImage({url});
+  drawProfile(); readout();
+}
+
+function initMap(){
+  const [nz,ny,nx]=IX.shape;
+  // extend by half a cell: the stored values are cell CENTRES
+  const dLat=(IX.lat[1]-IX.lat[0])/(ny-1)/2, dLon=(IX.lon[1]-IX.lon[0])/(nx-1)/2;
+  const W=IX.lon[0]-dLon, E=IX.lon[1]+dLon, S=IX.lat[0]-dLat, N=IX.lat[1]+dLat;
+
+  map=new maplibregl.Map({
+    container:"map",
+    style:{
+      version:8,
+      sources:{
+        base:{type:"raster",tiles:[BASEMAPS.dark.base],tileSize:256,attribution:ESRI_ATTR},
+        baseref:{type:"raster",tiles:[BASEMAPS.dark.ref],tileSize:256},
+        field:{type:"image",url:renderCanvas(),
+               coordinates:[[W,N],[E,N],[E,S],[W,S]]}
+      },
+      layers:[
+        {id:"base",type:"raster",source:"base"},
+        {id:"field",type:"raster",source:"field",
+         paint:{"raster-opacity":+$("opac").value/100,"raster-resampling":"nearest"}},
+        // place names sit ON TOP of the data so the basin stays readable
+        {id:"baseref",type:"raster",source:"baseref",paint:{"raster-opacity":0.9}}
+      ]
+    },
+    bounds:[[45,5],[105,30]], fitBoundsOptions:{padding:12}, attributionControl:{compact:true}
+  });
+  map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
+  map.on("load",()=>{
+    ready=true;
+    pick=openOnOcean();
+    map.getSource("field").updateImage({url:renderCanvas()});
+    drawProfile(); readout(); marker();
+  });
+  map.on("click",e=>{
+    const y=yOf(e.lngLat.lat), x=xOf(e.lngLat.lng);
+    if(y<0||x<0||y>=IX.shape[1]||x>=IX.shape[2]) return;
+    pick=[y,x]; drawProfile(); readout(); marker();
+  });
+  map.getCanvas().style.cursor="crosshair";
+}
+
+let mk=null;
+function marker(){
+  if(!pick) return;
+  const el=document.createElement("div");
+  el.style.cssText="width:14px;height:14px;border:2px solid #fff;border-radius:50%;"+
+                   "box-shadow:0 0 0 2px rgba(0,0,0,.6)";
+  if(mk) mk.remove();
+  mk=new maplibregl.Marker({element:el}).setLngLat([lonOf(pick[1]),latOf(pick[0])]).addTo(map);
+}
+
+// The grid centre is central India, and a coastal cell has no profile either, so
+// the obvious default shows an empty panel. Take the valid cell furthest from any
+// missing one, via two sweeps of a chamfer distance transform.
+function openOnOcean(){
+  const [nz,ny,nx]=IX.shape, INF=1e9, d=new Float32Array(ny*nx);
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++) d[y*nx+x]=isFinite(val(0,0,y,x))?INF:0;
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    const i=y*nx+x; if(!d[i])continue;
+    if(y===0||x===0||y===ny-1||x===nx-1){d[i]=0;continue;}
+    d[i]=Math.min(d[i], d[(y-1)*nx+x]+1, d[y*nx+x-1]+1);
+  }
+  let best=-1,bi=0;
+  for(let y=ny-1;y>=0;y--)for(let x=nx-1;x>=0;x--){
+    const i=y*nx+x; if(!d[i])continue;
+    if(y<ny-1) d[i]=Math.min(d[i], d[(y+1)*nx+x]+1);
+    if(x<nx-1) d[i]=Math.min(d[i], d[y*nx+x+1]+1);
+    if(d[i]>best){best=d[i];bi=i;}
+  }
+  return [Math.floor(bi/nx), bi%nx];
+}
+
+// ---- the temperature readout ----------------------------------------------
+function readout(){
+  if(!pick){ return; }
+  const z=+$("depth").value, [y,x]=pick;
+  const p=val(0,z,y,x), r=val(1,z,y,x);
+  if(!isFinite(p)&&!isFinite(r)){
+    $("tval").textContent="no data";
+    $("twhere").textContent="That point is land, or too close to the coast for a 9x9 patch.";
+    $("tcmp").innerHTML=""; return;
+  }
+  const isT=(layer==="T"), k=isT?0:+layer;
+  const P0=isT?p:pval(0,k,y,x), R0=isT?r:pval(1,k,y,x);
+  const unit=isT?"°C":IX.products.units[k];
+  $("tval").innerHTML=(isFinite(P0)?P0.toFixed(isT?2:1):"--")+
+                      ` <span style='font-size:20px'>${unit}</span>`;
+  const what=isT?`${IX.depths[z].toFixed(0)} m depth`:IX.products.labels[k];
+  $("twhere").innerHTML=`${latOf(y).toFixed(2)}°N, ${lonOf(x).toFixed(2)}°E &nbsp;·&nbsp; `+
+                        `${what} &nbsp;·&nbsp; ${IX.dates[dayIdx]}`;
+  const d=P0-R0, tol=isT?0.5:(k===0?10:15);
+  let extra="";
+  if(!isT&&k===4&&isFinite(P0)){
+    const L=["LOW","WATCH","ELEVATED","HIGH"][Math.max(0,Math.min(3,Math.round(P0)))];
+    $("tval").innerHTML=`<span style="font-size:30px">${L}</span>`;
+    extra="rule: TCHP over 50 kJ/cm², anomalously high here, and the model confident";
+  }
+  if(!isT&&k===3&&isFinite(P0)){
+    extra = P0<=0.5 ? '<span style="color:#5fd39b">confident here</span>'
+                    : '<span style="color:#ffb454">less certain here -- treat with caution</span>';
+  }
+  if(!isT&&k===0&&isFinite(P0)){
+    // 50 kJ/cm2 is the rule-of-thumb rapid-intensification threshold
+    extra=P0>=50?`<span style="color:#ff7b72"><b>above the 50 kJ/cm² cyclone threshold</b></span>`
+                :`<span style="color:#5fd39b">below the 50 kJ/cm² threshold</span>`;
+  }
+  if(!isT&&k===4){
+    // the second slot of the risk layer holds the TCHP anomaly, not a reference
+    $("tcmp").innerHTML=
+      `<span>TCHP vs local norm <b class="${R0>=8?'neg':'pos'}">`+
+      `${isFinite(R0)?(R0>=0?"+":"")+R0.toFixed(1)+" kJ/cm²":"--"}</b></span>`+
+      (extra?`<span>${extra}</span>`:"");
+  } else if(!isT&&k===3){
+    $("tcmp").innerHTML = extra?`<span>${extra}</span>`:"";
+  } else {
+    $("tcmp").innerHTML=
+      `<span>reference <b>${isFinite(R0)?R0.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
+      `<span>difference <b class="${Math.abs(d)<tol?'pos':'neg'}">`+
+      `${isFinite(d)?(d>=0?"+":"")+d.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
+      (extra?`<span>${extra}</span>`:"");
+  }
+}
+
+// ---- profile ---------------------------------------------------------------
+function drawProfile(){
+  const [nz,ny,nx]=IX.shape, svg=$("prof");
+  if(!pick){ svg.innerHTML=""; return; }
+  const [y,x]=pick, p=[],r=[];
+  for(let z=0;z<nz;z++){ p.push(val(0,z,y,x)); r.push(val(1,z,y,x)); }
+  const ok=p.concat(r).filter(isFinite);
+  if(!ok.length){ svg.innerHTML=""; $("profmeta").textContent=""; return; }
+
+  const L=52,R=14,T=14,B=32,W=340,H=380;
+  const tmin=Math.floor(Math.min(...ok)-1), tmax=Math.ceil(Math.max(...ok)+1);
+  const zmax=IX.depths[nz-1];
+  const sx=v=>L+(v-tmin)/(tmax-tmin)*(W-L-R);
+  const sy=d=>T+Math.sqrt(d/zmax)*(H-T-B);   // sqrt axis: room for the upper ocean
+  let s='';
+  const step=Math.max(1,Math.round((tmax-tmin)/5));
+  for(let g=tmin;g<=tmax;g+=step){
+    s+=`<line x1="${sx(g)}" y1="${T}" x2="${sx(g)}" y2="${H-B}" stroke="#1e2b42"/>`;
+    s+=`<text x="${sx(g)}" y="${H-B+15}" fill="#8fa3bf" font-size="11" text-anchor="middle">${g}</text>`;
+  }
+  for(const d of [0,50,150,300,600,1000]){
+    s+=`<line x1="${L}" y1="${sy(d)}" x2="${W-R}" y2="${sy(d)}" stroke="#1e2b42"/>`;
+    s+=`<text x="${L-7}" y="${sy(d)+4}" fill="#8fa3bf" font-size="11" text-anchor="end">${d}</text>`;
+  }
+  const zsel=IX.depths[+$("depth").value];
+  s+=`<line x1="${L}" y1="${sy(zsel)}" x2="${W-R}" y2="${sy(zsel)}" stroke="#4da3ff" `+
+     `stroke-dasharray="3 3" opacity=".6"/>`;
+  const path=a=>a.map((v,i)=>(isFinite(v)?(i?"L":"M")+sx(v)+","+sy(IX.depths[i]):"")).join(" ");
+  s+=`<path d="${path(r)}" fill="none" stroke="#e8eef7" stroke-width="2"/>`;
+  s+=`<path d="${path(p)}" fill="none" stroke="#4da3ff" stroke-width="2"/>`;
+  for(let i=0;i<nz;i++){
+    if(isFinite(r[i])) s+=`<circle cx="${sx(r[i])}" cy="${sy(IX.depths[i])}" r="2.3" fill="#e8eef7"/>`;
+    if(isFinite(p[i])) s+=`<circle cx="${sx(p[i])}" cy="${sy(IX.depths[i])}" r="2.3" fill="#4da3ff"/>`;
+  }
+  s+=`<rect x="${W-116}" y="${T+4}" width="102" height="38" fill="#080d16" stroke="#1e2b42" rx="4"/>`;
+  s+=`<line x1="${W-108}" y1="${T+16}" x2="${W-90}" y2="${T+16}" stroke="#4da3ff" stroke-width="2"/>`;
+  s+=`<text x="${W-85}" y="${T+20}" fill="#e8eef7" font-size="11">predicted</text>`;
+  s+=`<line x1="${W-108}" y1="${T+32}" x2="${W-90}" y2="${T+32}" stroke="#e8eef7" stroke-width="2"/>`;
+  s+=`<text x="${W-85}" y="${T+36}" fill="#e8eef7" font-size="11">reference</text>`;
+  s+=`<text x="14" y="${H-5}" fill="#8fa3bf" font-size="11">temperature (°C)</text>`;
+  s+=`<text transform="translate(13,${T+48}) rotate(-90)" fill="#8fa3bf" font-size="11">depth (m)</text>`;
+  svg.innerHTML=s;
+
+  const diffs=p.map((v,i)=>v-r[i]).filter(isFinite);
+  const rmse=Math.sqrt(diffs.reduce((a,b)=>a+b*b,0)/(diffs.length||1));
+  $("profmeta").innerHTML=`Whole-profile RMSE against GLORYS: <b>${rmse.toFixed(2)} °C</b>`;
+}
+
+// ---- panels ----------------------------------------------------------------
+function buildStats(){
+  const m=IX.metrics, imp=m.baseline_rmse?100*(m.baseline_rmse-m.mean_rmse)/m.baseline_rmse:null;
+  const cell=(v,l)=>`<div class="stat"><b>${v}</b><small>${l}</small></div>`;
+  $("stats").innerHTML=
+    cell(m.mean_corr?.toFixed(3)??"-","mean correlation")+
+    cell((m.mean_rmse?.toFixed(3)??"-")+" °C","mean RMSE")+
+    cell((m.bands?.thermocline_75_300m?.mean_rmse?.toFixed(3)??"-")+" °C","thermocline 75-300 m")+
+    (imp!==null?cell("+"+imp.toFixed(0)+"%","vs classical baseline"):"");
+}
+function buildPerDepth(){
+  let s='<tr><th>depth (m)</th><th>correlation</th><th>RMSE (°C)</th></tr>';
+  for(const r of IX.metrics.per_depth)
+    s+=`<tr><td>${r.depth_m.toFixed(0)}</td><td>${r.corr.toFixed(3)}</td><td>${r.rmse.toFixed(3)}</td></tr>`;
+  $("perdepth").innerHTML=s;
+}
+function buildClim(){
+  let s='<tr><th>depth (m)</th><th>model</th><th>climatology</th><th>skill</th></tr>';
+  for(const r of (IX.metrics.vs_climatology||[])){
+    const k=r.skill_vs_clim;
+    s+=`<tr><td>${r.depth_m.toFixed(0)}</td><td>${r.rmse_model.toFixed(3)}</td>`+
+       `<td>${r.rmse_clim.toFixed(3)}</td>`+
+       `<td class="${k>=0?"pos":"neg"}">${k>=0?"+":""}${k.toFixed(2)}</td></tr>`;
+  }
+  $("clim").innerHTML=s;
+}
+
+function buildAlerts(){
+  const all=IX.alerts||{};
+  const day=IX.dates[Math.max(0,dayIdx)]||IX.dates[IX.dates.length-1];
+  const rows=(all[day]||[]).slice(0,10);
+  let s='<tr><th>coastal segment</th><th>region</th><th>level</th>'+
+        '<th>peak TCHP</th><th>nearest</th><th>spread</th></tr>';
+  if(!rows.length) s+='<tr><td colspan="6" style="color:#8fa3bf">'+
+        'No segments met the rule on this date.</td></tr>';
+  for(const a of rows)
+    s+=`<tr><td>${a.segment}</td><td style="text-align:left">${a.region}</td>`+
+       `<td class="${a.level==="HIGH"?"neg":""}">${a.level}</td>`+
+       `<td>${a.peak_tchp_kj_cm2}</td><td>${a.nearest_flagged_km} km</td>`+
+       `<td>${a.model_spread_degC ?? "-"}</td></tr>`;
+  $("alerts").innerHTML=s;
+  const n=(all[day]||[]).length;
+  $("alertnote").textContent=`${day} — ${n} segment${n===1?"":"s"} met the rule`+
+    (n>10?" (showing 10)":"")+". Change the date to step through the record.";
+}
+
+// ---- events ----------------------------------------------------------------
+$("depth").oninput=refresh;
+$("opac").oninput=e=>{
+  $("opacv").textContent=e.target.value+"%";
+  if(ready) map.setPaintProperty("field","raster-opacity",+e.target.value/100);
+};
+$("date").oninput=async e=>{
+  await loadDay(+e.target.value);
+  $("datesel").value=IX.dates[dayIdx];
+  refresh(); buildAlerts();
+};
+$("datesel").onchange=async e=>{
+  const i=IX.dates.indexOf(e.target.value);
+  if(i<0){ e.target.value=IX.dates[dayIdx]; return; }
+  $("date").value=i; await loadDay(i); refresh(); buildAlerts();
+};
+$("basemap").onchange=e=>{
+  const b=BASEMAPS[e.target.value];
+  map.getSource("base").setTiles([b.base]);
+  map.getSource("baseref").setTiles([b.ref]);
+};
+$("region").onchange=e=>{
+  const b=REGIONS[+e.target.value][1];
+  map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:24,duration:700});
+};
+for(const b of document.querySelectorAll("#layers button")) b.onclick=()=>{
+  document.querySelectorAll("#layers button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); layer=b.dataset.l;
+  const off=(layer!=="T");
+  $("depth").disabled=off;
+  $("depth").parentElement.style.opacity=off?.4:1;
+  // there is no GLORYS reference for uncertainty or risk -- they are ours alone
+  const predOnly=(layer==="3"||layer==="4");
+  document.querySelectorAll("#modes button").forEach((x,i)=>{
+    x.disabled=predOnly&&i>0;
+    x.style.opacity=(predOnly&&i>0)?.35:1;
+  });
+  if(predOnly){
+    document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));
+    document.querySelector('#modes button[data-m="0"]').classList.add("on");
+    mode=0;
+  }
+  refresh();
+};
+for(const b of document.querySelectorAll("#modes button")) b.onclick=()=>{
+  document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); mode=+b.dataset.m; refresh();
+};
+loadIndex();
+</script>
+</body>
+</html>
