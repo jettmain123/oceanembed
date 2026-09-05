@@ -30,6 +30,8 @@ def main() -> None:
     ap.add_argument("--backend", type=str, default="auto", choices=["auto", "torch", "numpy"])
     ap.add_argument("--batch-size", type=int, default=None)
     ap.add_argument("--lr", type=float, default=None)
+    ap.add_argument("--seed", type=int, default=None,
+                    help="override the config seed -- use several to check a result is not noise")
     ap.add_argument("--device", type=str, default="auto",
                     help="auto | cpu | cuda | cuda:0 -- auto uses the GPU when one is usable")
     args = ap.parse_args()
@@ -42,7 +44,7 @@ def main() -> None:
     batch = args.batch_size or int(cfg["train"]["batch_size"])
     lr = args.lr or float(cfg["train"]["lr"])
     wd = float(cfg["train"]["weight_decay"])
-    seed = int(cfg["train"]["seed"])
+    seed = args.seed if args.seed is not None else int(cfg["train"]["seed"])
 
     dpath = resolve(cfg["paths"]["dataset"])
     if not dpath.exists():

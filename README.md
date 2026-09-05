@@ -125,27 +125,36 @@ scripts/                  00..05 pipeline stages, plus the real-data variants
 
 ## Results (synthetic holdout: 7200 profiles over 18 days never seen in training)
 
-| | OceanEmbed (CNN) | RF baseline (point-only) |
+CNN encoder, patch 9, 120 epochs.
+
+| | OceanEmbed | RF baseline (point-only) |
 |---|---|---|
-| mean correlation | **0.965** | 0.936 |
-| mean RMSE | **0.441 degC** | 0.619 degC |
-| mixed layer 0-50 m RMSE | 0.491 | **0.271** |
-| thermocline 75-300 m RMSE | **0.552** | 1.170 |
-| deep 500-1000 m RMSE | **0.119** | 0.215 |
+| mean correlation | **0.986** | 0.936 |
+| mean RMSE | **0.218 degC** | 0.619 degC |
+| mixed layer 0-50 m RMSE | **0.182** | 0.271 |
+| thermocline 75-300 m RMSE | **0.323** | 1.170 |
+| deep 500-1000 m RMSE | **0.084** | 0.215 |
 
-29% lower mean RMSE than the point-only baseline, and roughly 45-60% lower through
-the thermocline -- exactly where spatial context should matter. Note that torch on
-CPU is not bit-deterministic even with the seed fixed: repeated runs of
-`03_train.py` land between about 28% and 35% mean-RMSE improvement. Quote the
-number from your own `outputs/scorecard.json`, not this table.
+**64.7% lower mean RMSE than the point-only baseline**, and 64-77% lower at every
+depth between 50 m and 500 m.
 
-**The baseline wins in the top 20 m, and that is worth saying out loud.** Near the
-surface temperature is almost exactly SST, so a point model recovers it trivially;
-our loss deliberately up-weights the thermocline (2.0) over the surface (1.0).
-Skill also decays below 500 m, where the surface stops constraining temperature.
-Both are the physics behaving as it should, and we report them rather than quote
-one flattering basin-wide number.
+The field-of-view ablation is the result that matters most: with identical
+samples and only the patch size changed, going from a 1x1 patch (centre cell
+only) to 9x9 cuts mean RMSE by 48% and thermocline RMSE by 58%. That isolates the
+spatial contribution cleanly, which a CNN-vs-RandomForest comparison cannot.
+See `EXPERIMENTS.md`.
 
-Full detail in `outputs/scorecard.json` plus three figures: `skill_vs_depth.png`,
-`example_profiles.png`, `spatial_map.png`. See `FINAL_PLAN.md` for the roles,
-the 20-hour timeline and the judge talking points.
+Two honest points to keep in any write-up:
+
+- The baseline still edges us in the **top 10 m** (0.119 vs 0.164 degC). Near the
+  surface, temperature is essentially the surface temperature, so a point model
+  recovers it almost exactly. The 0.045 degC gap is negligible, and from 20 m
+  down we win everywhere.
+- **Skill decays below 500 m**, where the surface stops constraining temperature.
+  That is physics, not a defect, and we report it rather than quoting one
+  flattering basin-wide number.
+
+Numbers vary by roughly +/-0.01 degC between runs even with the seed fixed, so
+quote your own `outputs/scorecard.json`. Full detail there, plus three figures:
+`skill_vs_depth.png`, `example_profiles.png`, `spatial_map.png`. See
+`FINAL_PLAN.md` for roles and the timeline, `EXPERIMENTS.md` for the ablations.

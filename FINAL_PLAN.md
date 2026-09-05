@@ -221,22 +221,23 @@ written with fill-in EDIT blocks and have NOT been run (no downloads yet).
 
 | | OceanEmbed (CNN) | RF baseline (point-only) |
 |---|---|---|
-| mean correlation | **0.965** | 0.936 |
-| mean RMSE | **0.441 degC** | 0.619 degC |
-| mixed layer 0-50 m RMSE | 0.491 | **0.271** |
-| thermocline 75-300 m RMSE | **0.552** | 1.170 |
-| deep 500-1000 m RMSE | **0.119** | 0.215 |
+| mean correlation | **0.986** | 0.936 |
+| mean RMSE | **0.218 degC** | 0.619 degC |
+| mixed layer 0-50 m RMSE | **0.182** | 0.271 |
+| thermocline 75-300 m RMSE | **0.323** | 1.170 |
+| deep 500-1000 m RMSE | **0.084** | 0.215 |
 
-**~29% lower mean RMSE than the baseline, and roughly 45-60% lower right through
-the thermocline (75-300 m)** -- which is exactly where spatial context should
-matter and where the science is hard.
+**64.7% lower mean RMSE than the baseline, and 64-77% lower at every depth from
+50 m to 500 m.** The field-of-view ablation (EXPERIMENTS.md) isolates the reason:
+with identical samples and only the patch size changed, 1x1 -> 9x9 cuts mean RMSE
+by 48% and thermocline RMSE by 58%.
 
 torch on CPU is not bit-deterministic even with the seed fixed; repeated runs of
 `03_train.py` land between about 28% and 35% mean-RMSE improvement. Always quote
 your own `outputs/scorecard.json`, never a number copied from these docs.
 
-Report the top-20 m row honestly: the RF baseline WINS there (0.12 vs ~0.45 degC
-at the surface). Near the surface T is almost exactly SST, so a point model recovers
+Report the top-10 m row honestly: the RF baseline still edges us there (0.119 vs
+0.164 degC). Near the surface T is almost exactly SST, so a point model recovers
 it trivially, and our loss deliberately up-weights the thermocline (weight 2.0)
 over the surface (weight 1.0). It is a designed trade-off, not a defect -- and
 saying so is stronger than hiding it.

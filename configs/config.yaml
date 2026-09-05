@@ -31,7 +31,7 @@ model:
     heads: 4
 
 train:
-  epochs: 15
+  epochs: 120
   batch_size: 256
   lr: 8.0e-4
   weight_decay: 1.0e-4

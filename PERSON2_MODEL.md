@@ -188,14 +188,17 @@ tried it, the simpler model won" is a perfectly good slide.
 
 One table. Give it to Person 3:
 
+All four experiments have already been run once on the practice data. Results
+are in `EXPERIMENTS.md`. Your job is to REPEAT them on the real data.
+
 | Experiment | mean RMSE | thermocline RMSE | mean correlation |
 |---|---|---|---|
-| patch 1 (centre only) | | | |
-| patch 7 | | | |
-| patch 9 (current) | 0.441 | 0.552 | 0.965 |
-| patch 11 | | | |
-| more epochs | | | |
-| ViT | | | |
+| patch 1 (centre only) | 0.789 | 1.315 | 0.884 |
+| patch 7 | 0.460 | 0.648 | 0.956 |
+| patch 9, 25 epochs | 0.420 | 0.553 | 0.966 |
+| patch 11 | 0.408 | 0.553 | 0.967 |
+| **patch 9, 120 epochs (final)** | **0.218** | **0.323** | **0.986** |
+| ViT, 60 epochs | 0.224 | 0.363 | 0.982 |
 | RandomForest baseline | 0.619 | 1.170 | 0.936 |
 
 Lower RMSE is better. Higher correlation is better.

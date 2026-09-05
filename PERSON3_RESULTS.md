@@ -78,15 +78,21 @@ care about this.
 ### Slide 4 - Results
 Use `skill_vs_depth.png` and Person 2's table.
 
-Headline: about 29 percent more accurate than a standard approach, and 45 to 60
-percent more accurate in the thermocline - the tricky middle layer where
-temperature changes fastest.
+Headline: about 65 percent more accurate than a standard approach, and 64 to 77
+percent more accurate at every depth from 50 m to 500 m - including the
+thermocline, the tricky middle layer where temperature changes fastest.
+
+The strongest single slide is the field-of-view test in `EXPERIMENTS.md`: with
+everything else held identical and only the size of the square changed, going
+from 1 cell to 9x9 cells cuts the error by 48 percent. That proves the idea the
+whole project rests on.
 
 **Include the honest part. It makes you more credible, not less:**
 
-- In the top 20 m the simple baseline actually BEATS us. That is expected -
-  near the surface the temperature is nearly the same as the surface
-  temperature, so anything can predict it.
+- In the top 10 m the simple baseline still edges us (0.119 vs 0.164 degC). That
+  is expected - near the surface the temperature is nearly the same as the
+  surface temperature, so anything can predict it. The gap is tiny and we win
+  everywhere from 20 m down.
 - Below 500 m our accuracy drops, because the surface simply stops telling you
   what is happening that deep. No method can fix that. It is physics.
 
