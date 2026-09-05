@@ -69,69 +69,34 @@ cubes will not merge.
 
 ---
 
-## FIRST: check your months actually exist in these products
+## Verified dataset coverage
 
-Copernicus splits most variables into a near-real-time stream and a reprocessed
-one, and they cover different periods. October 2024 came from the NRT streams.
-Older months may only exist in the reprocessed ones.
+Checked against the Copernicus catalogue, not assumed. These are the
+**reprocessed / multi-year** streams, and all four cover Jan 2022 to Oct 2024:
 
-Run this before downloading anything:
+| dataset | coverage |
+|---|---|
+| `METOFFICE-GLO-SST-L4-REP-OBS-SST` | 1981-10 .. 2026-03 |
+| `cmems_obs-sl_glo_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D` | 1993-01 .. 2026-01 |
+| `cmems_obs-mob_glo_phy-sss_my_multi_P1D` | 1993-01 .. 2024-12 |
+| `cmems_mod_glo_phy_my_0.083deg_P1D-m` | 1993-01 .. 2026-06 |
 
-```
-for id in METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2           cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D           cmems_obs-mob_glo_phy-sss_my_multi_P1D           cmems_mod_glo_phy_my_0.25deg_P1D-m ; do
-  echo "=== $id"
-  copernicusmarine describe --dataset-id $id 2>/dev/null | grep -iE '"(start|end)"|coordinate_id.: .time' | head -6
-done
-```
-
-**If a product does not cover your months, say so in the group chat. Do NOT
-silently switch to a different product** -- the two streams disagree slightly,
-and mixing them across months puts artificial jumps into the training data that
-the model will happily learn as if they were real ocean signal.
-
-If no single product covers all three years, we shorten the window instead. A
-consistent 18 months beats an inconsistent 3 years.
-
----
+The near-real-time streams do **not** reach back far enough -- OSTIA NRT starts
+2024-01-17 and DUACS NRT starts 2022-10-04 -- which is why we use the
+reprocessed ones throughout. `cmems_mod_glo_phy_my_0.25deg_P1D-m` does not
+exist; 1/12 degree is the only GLORYS in this stream, roughly 0.5 GB per month
+for `thetao` alone.
 
 ## Download your months
 
-One `subset` call per product per month. Replace `YYYY-MM` and the month's last
-day. Everything lands in the same folders regardless of month.
+One command per month. It works out the last day itself, subsets server-side,
+and prints a summary telling you if anything failed:
 
 ```
-M=2023-01           # <-- change this for each of your months
-LAST=31             # last day of that month (28/29/30/31)
-BOX="--minimum-longitude 45 --maximum-longitude 105 --minimum-latitude 5 --maximum-latitude 30"
-DATES="--start-datetime ${M}-01 --end-datetime ${M}-${LAST}"
-
-# SST -- OSTIA (Kelvin; harmonize converts it)
-copernicusmarine subset -i METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2   --variable analysed_sst $BOX $DATES   -o data/raw/ostia --output-filename ostia_$M.nc
-
-# Sea level anomaly -- DUACS
-copernicusmarine subset -i cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D   --variable sla $BOX $DATES   -o data/raw/duacs --output-filename duacs_$M.nc
-
-# Salinity
-copernicusmarine subset -i cmems_obs-mob_glo_phy-sss_my_multi_P1D   --variable sos $BOX $DATES   -o data/raw/sss --output-filename sss_$M.nc
-
-# GLORYS -- the training target. 0.25 deg, thetao only, capped at 1100 m.
-# We regrid to 0.25 deg anyway, so 1/12 deg costs ten times the bandwidth for
-# nothing. Confirm the 0.25 deg id in the catalogue; they get renamed.
-copernicusmarine subset -i cmems_mod_glo_phy_my_0.25deg_P1D-m   --variable thetao $BOX $DATES   --minimum-depth 0 --maximum-depth 1100   -o data/raw/glorys --output-filename glorys_$M.nc
-
-# Currents -- OSCAR
-podaac-data-downloader -c OSCAR_L4_OC_FINAL_V2.0 -d data/raw/oscar   -sd ${M}-01T00:00:00Z -ed ${M}-${LAST}T23:59:59Z -b="45,5,105,30"
-
-# Winds -- CCMP (6-hourly; harmonize averages it to daily)
-podaac-data-downloader -c CCMP_WINDS_10M6HR_L4_V3.1 -d data/raw/ccmp   -sd ${M}-01T00:00:00Z -ed ${M}-${LAST}T23:59:59Z -b="45,5,105,30"
+bash scripts/download/download_month.sh 2022-01
 ```
 
-Expect roughly 150 MB per month across all six products. If GLORYS alone is
-coming down at hundreds of MB per month, you are on the 1/12 degree product or
-you forgot `--variable thetao`.
-
-If a download dies partway, just run it again -- `subset` overwrites cleanly, and
-the PODAAC downloader skips files it already has.
+Repeat for each of your months.
 
 ---
 
