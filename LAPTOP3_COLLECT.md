@@ -1,6 +1,14 @@
 # LAPTOP 3 -- DATA COLLECTION
 
-**Your months: January, April, July and October 2024**
+**Your months: all twelve months of **2024** (2024-01 through 2024-12)**
+
+> **Changed from the original plan.** We first assigned four scattered months per
+> year. Training on 2022 showed why that is wrong: the holdout ends up being a
+> season the model never saw, so it has to extrapolate, and skill drops. What
+> fixes it is the SAME SEASON appearing in more than one year -- then the test
+> period is interpolation, not extrapolation. That needs continuous years.
+> Laptop 1 already collected 2022-01 to 2022-10 this way.
+
 
 Yes, October 2024 again. The first pull used the near-real-time products, and
 everything else now uses the reprocessed ones. Re-downloading it on the same
@@ -95,7 +103,7 @@ for `thetao` alone.
 ## Download everything -- one command
 
 ```
-python scripts/download/collect.py --laptop 3
+python scripts/download/collect.py --months 2024-01 2024-02 2024-03 2024-04 2024-05 2024-06 2024-07 2024-08 2024-09 2024-10 2024-11 2024-12
 ```
 
 **On Windows you must use this Python version, not the .sh one.** Typing `bash`

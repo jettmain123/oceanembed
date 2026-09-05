@@ -52,9 +52,16 @@ PODAAC = [
     ("oscar", "OSCAR_L4_OC_FINAL_V2.0"),
     ("ccmp",  "CCMP_WINDS_10M6HR_L4_V3.1"),
 ]
-LAPTOPS = {1: ["2022-01", "2022-04", "2022-07", "2022-10"],
-           2: ["2023-01", "2023-04", "2023-07", "2023-10"],
-           3: ["2024-01", "2024-04", "2024-07", "2024-10"]}
+# Continuous years, not scattered months. Measured on the 2022 data: with only
+# part of a year, the chronological holdout is a season the model never saw, so
+# it extrapolates and skill collapses. The fix is the same season appearing in
+# more than one year, which needs complete years.
+def _year(y):
+    return [f"{y}-{m:02d}" for m in range(1, 13)]
+
+LAPTOPS = {1: ["2022-11", "2022-12"],      # completes what Laptop 1 already has
+           2: _year(2023),
+           3: _year(2024)}
 
 
 def find_exe(name):
