@@ -72,7 +72,7 @@ def main() -> None:
 
     pred_ = Predictor.load(cfg)
     print(pred_)
-    y = pred_.predict(arX)
+    y = pred_.predict(arX, meta=arM)
 
     print(f"\nOperational products on {arY.shape[0]} holdout profiles")
     print("predicted vs the same quantity computed from GLORYS:\n")

@@ -50,6 +50,13 @@ train:
   # usable when a satellite is down, and regularises it as a side effect --
   # measured 3-4x more robust AND slightly more accurate. See 03d.
   channel_dropout: 0.15
+  # What the model predicts. 'anomaly' subtracts the local climatology first, so
+  # predicting zero IS climatology and the model cannot score below it simply by
+  # failing to learn. Measured on 304 days of 2022: mean skill against
+  # climatology went from +5% to +27%, with the deep levels moving from -161% to
+  # about 0. The surface gets slightly worse, because there the absolute model
+  # could read temperature almost directly off SST.
+  target: anomaly
   # per-depth loss weights: up-weight the thermocline (50-300 m) where the
   # signal is hardest and most scientifically interesting
   depth_weights: [1.0, 1.0, 1.0, 1.1, 1.2, 1.5, 1.8, 2.0, 2.0, 2.0, 1.8, 1.5, 1.0, 0.8, 0.6]
@@ -68,6 +75,13 @@ dataset:
   # usable when a satellite is down, and regularises it as a side effect --
   # measured 3-4x more robust AND slightly more accurate. See 03d.
   channel_dropout: 0.15
+  # What the model predicts. 'anomaly' subtracts the local climatology first, so
+  # predicting zero IS climatology and the model cannot score below it simply by
+  # failing to learn. Measured on 304 days of 2022: mean skill against
+  # climatology went from +5% to +27%, with the deep levels moving from -161% to
+  # about 0. The surface gets slightly worse, because there the absolute model
+  # could read temperature almost directly off SST.
+  target: anomaly
 
 paths:
   raw: data/raw

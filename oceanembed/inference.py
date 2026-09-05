@@ -14,18 +14,25 @@ import numpy as np
 
 from . import load_config, resolve
 from .backend import torch_available
+from .climatology import Climatology
 from .dataset import apply_scalers, invert_target
 
 __all__ = ["Predictor"]
 
 
 class Predictor:
-    def __init__(self, model, backend: str, xm, xs, ym, ys, depths, meta: dict | None = None):
+    def __init__(self, model, backend: str, xm, xs, ym, ys, depths, meta: dict | None = None,
+                 clim=None, target: str = "absolute"):
         self.model = model
         self.backend = backend
         self.xm, self.xs, self.ym, self.ys = xm, xs, ym, ys
         self.depths = np.asarray(depths, dtype=np.float32)
         self.meta = meta or {}
+        # When the model was trained on anomalies, its output is a departure from
+        # the local climatology and has to be added back before anyone sees it.
+        # Everything downstream keeps working in absolute degrees Celsius.
+        self.clim = clim
+        self.target = target
 
     # -- construction --------------------------------------------------------
     @classmethod
@@ -64,7 +71,8 @@ class Predictor:
         model.eval()
         return cls(model, "torch", ck["xm"], ck["xs"], ck["ym"], ck["ys"], ck["depths"],
                    {"encoder": m.get("encoder", "cnn"), "epoch": ck.get("epoch"),
-                    "val_loss": ck.get("val_loss"), "path": str(path)})
+                    "val_loss": ck.get("val_loss"), "path": str(path)},
+                   clim=Climatology.unpack(ck), target=ck.get("target", "absolute"))
 
     @classmethod
     def _load_numpy(cls, path: Path, cfg: dict) -> "Predictor":
@@ -76,8 +84,13 @@ class Predictor:
                    {"encoder": "numpy_mlp", "path": str(path)})
 
     # -- use -----------------------------------------------------------------
-    def predict(self, X_raw: np.ndarray, batch: int = 4096) -> np.ndarray:
-        """Unscaled patches (N,C,P,P) -> temperature in degrees Celsius (N,15)."""
+    def predict(self, X_raw: np.ndarray, batch: int = 4096, meta=None) -> np.ndarray:
+        """Unscaled patches (N,C,P,P) -> temperature in degrees Celsius (N,15).
+
+        An anomaly-trained model needs `meta` ([t, lat, lon] per row) so the
+        local climatology can be added back. Without it we cannot place the
+        prediction, so we say so rather than silently returning anomalies.
+        """
         Xn, _ = apply_scalers(np.asarray(X_raw, dtype=np.float32), None,
                               self.xm, self.xs, self.ym, self.ys)
         if self.backend == "torch":
@@ -90,9 +103,17 @@ class Predictor:
             pred = np.concatenate(outs)
         else:
             pred = self.model.predict(Xn, batch=batch)
-        return invert_target(pred, self.ym, self.ys)
+        out = invert_target(pred, self.ym, self.ys)
+        if self.target == "anomaly":
+            if self.clim is None or meta is None:
+                raise ValueError(
+                    "this checkpoint predicts anomalies -- pass meta=[t,lat,lon] "
+                    "per row so the local climatology can be added back")
+            out = self.clim.to_absolute(out, meta)
+        return out
 
-    def predict_mc(self, X_raw, n: int = 20, p: float = 0.15, seed: int = 0, batch: int = 4096):
+    def predict_mc(self, X_raw, n: int = 20, p: float = 0.15, seed: int = 0,
+                   batch: int = 4096, **kwargs):
         """Monte-Carlo uncertainty: mean and standard deviation over n passes.
 
         The network has no dropout layers, so we cannot do classic MC-dropout on
@@ -108,6 +129,7 @@ class Predictor:
         X = np.asarray(X_raw, dtype=np.float32)
         rng = np.random.default_rng(seed)
         acc = []
+        meta = kwargs.get("meta")
         for i in range(n):
             Xi = X.copy()
             drop = rng.random(X.shape[1]) < p
@@ -115,7 +137,7 @@ class Predictor:
                 drop[rng.integers(X.shape[1])] = False
             for c in np.nonzero(drop)[0]:
                 Xi[:, c] = self.xm[0, c]         # the mean is the no-information value
-            acc.append(self.predict(Xi, batch=batch))
+            acc.append(self.predict(Xi, batch=batch, meta=meta))
         A = np.stack(acc)
         return A.mean(axis=0), A.std(axis=0)
 
@@ -131,4 +153,5 @@ class Predictor:
         return self.model.embed(Xn)
 
     def __repr__(self) -> str:
-        return f"<Predictor backend={self.backend} encoder={self.meta.get('encoder')} depths={self.depths.size}>"
+        return (f"<Predictor backend={self.backend} encoder={self.meta.get('encoder')} "
+                f"target={self.target} depths={self.depths.size}>")

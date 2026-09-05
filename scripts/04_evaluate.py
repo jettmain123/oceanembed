@@ -135,7 +135,7 @@ def main() -> None:
 
     pred_ = Predictor.load(cfg, prefer=None if args.backend == "auto" else args.backend)
     print(pred_, "\ncheckpoint:", pred_.meta.get("path"))
-    y_pred = pred_.predict(arX)
+    y_pred = pred_.predict(arX, meta=arM)
 
     card = scorecard(arY, y_pred, depths, label=f"oceanembed_{pred_.meta.get('encoder')}")
     card["backend"] = pred_.backend

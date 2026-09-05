@@ -20,6 +20,7 @@ import numpy as np
 
 from oceanembed import ensure_dirs, load_config, resolve
 from oceanembed.backend import describe, torch_available
+from oceanembed.climatology import Climatology
 from oceanembed.dataset import apply_scalers
 
 
@@ -31,6 +32,10 @@ def main() -> None:
     ap.add_argument("--batch-size", type=int, default=None)
     ap.add_argument("--lr", type=float, default=None)
     ap.add_argument("--weight-decay", type=float, default=None)
+    ap.add_argument("--target", choices=["absolute", "anomaly"], default=None,
+                    help="what the model predicts. 'anomaly' subtracts the local "
+                         "climatology first, so predicting zero equals climatology "
+                         "and the model cannot score below it by failing to learn.")
     ap.add_argument("--channel-dropout", type=float, default=None,
                     help="probability of blanking a whole input channel per sample. "
                          "Teaches the model to cope when a satellite is down or a "
@@ -59,9 +64,28 @@ def main() -> None:
         raise SystemExit(f"missing {dpath} -- run scripts/02_build_dataset.py first")
     d = np.load(dpath, allow_pickle=True)
 
-    xm, xs, ym, ys = d["xm"], d["xs"], d["ym"], d["ys"]
-    trX, trY = apply_scalers(d["trX"], d["trY"], xm, xs, ym, ys)
-    vaX, vaY = apply_scalers(d["vaX"], d["vaY"], xm, xs, ym, ys)
+    target = args.target or cfg["train"].get("target", "absolute")
+    clim = Climatology.unpack(d) if target == "anomaly" else None
+    if target == "anomaly" and clim is None:
+        raise SystemExit("no climatology in dataset.npz -- rebuild with "
+                         "scripts/02_build_dataset.py, which now stores one")
+
+    trY_raw, vaY_raw = d["trY"], d["vaY"]
+    if clim is not None:
+        # Predict the departure from the local norm, not the temperature itself.
+        # Scalers are then fitted on the ANOMALY, which is what the network sees.
+        trY_raw = clim.to_anomaly(trY_raw, d["trM"])
+        vaY_raw = clim.to_anomaly(vaY_raw, d["vaM"])
+
+    xm, xs = d["xm"], d["xs"]
+    if clim is not None:
+        ym = trY_raw.mean(axis=0).astype("float32")
+        ys = trY_raw.std(axis=0).astype("float32")
+        ys[ys < 1e-6] = 1.0
+    else:
+        ym, ys = d["ym"], d["ys"]
+    trX, trY = apply_scalers(d["trX"], trY_raw, xm, xs, ym, ys)
+    vaX, vaY = apply_scalers(d["vaX"], vaY_raw, xm, xs, ym, ys)
     depths = d["depths"]
     n_ch, P = trX.shape[1], trX.shape[2]
 
@@ -74,6 +98,8 @@ def main() -> None:
     print(f"train {trX.shape}  val {vaX.shape}  channels {n_ch}  patch {P}  depths {depths.size}")
     print(f"epochs {epochs}  batch {batch}  lr {lr}  wd {wd}  encoder {cfg['model']['encoder']}"
           f"  channel_dropout {cdrop}")
+    print(f"target: {target}" + ("  (predicting the anomaly from the local climatology)"
+                                 if clim is not None else ""))
 
     t0 = time.time()
     out_dir = resolve(cfg["paths"]["outputs"])
@@ -158,6 +184,8 @@ def main() -> None:
                         "in_ch": n_ch, "n_depths": int(depths.size),
                         "xm": xm, "xs": xs, "ym": ym, "ys": ys, "depths": depths,
                         "backend": "torch", "epoch": ep, "val_loss": vl,
+                        "target": target,
+                        **(clim.pack() if clim is not None else {}),
                     },
                     ckpt,
                 )
@@ -189,7 +217,7 @@ def main() -> None:
                     "device": str(dev) if use_torch else "cpu",
                     "encoder": cfg["model"]["encoder"] if use_torch else "numpy_mlp",
                     "epochs": epochs, "best_val_loss": float(best),
-                    "channel_dropout": cdrop,
+                    "channel_dropout": cdrop, "target": target,
                     "seconds": round(dt, 1), "history": history}, indent=2),
         encoding="utf-8",
     )

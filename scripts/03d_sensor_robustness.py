@@ -58,7 +58,7 @@ def main() -> None:
         X = arX.copy()
         for c in drop:
             X[:, c] = xm[0, c]          # the mean IS the no-information value
-        y = pred_.predict(X)
+        y = pred_.predict(X, meta=d['arM'])
         card = scorecard(arY, y, depths)
         return card, y
 

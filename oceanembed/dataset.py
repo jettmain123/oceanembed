@@ -18,6 +18,7 @@ import xarray as xr
 from numpy.lib.stride_tricks import sliding_window_view
 
 from . import load_config
+from .climatology import build_from_samples
 
 __all__ = [
     "channel_names",
@@ -230,6 +231,14 @@ def build(ds: xr.Dataset, cfg: dict | None = None, verbose: bool = True) -> dict
     if verbose:
         print("[dataset] scalers fitted on the train split only")
 
+    # Climatology from the TRAIN samples only, carried with the dataset so the
+    # trainer and the predictor use the identical one. Building it from the whole
+    # record would leak the holdout into the anomaly target.
+    clim = build_from_samples(trY, trM)
+    if verbose:
+        print(f"[dataset] climatology over {clim.keys.shape[0]} locations "
+              f"(train days only)")
+
     return {
         "trX": trX, "trY": trY, "trM": trM,
         "vaX": vaX, "vaY": vaY, "vaM": vaM,
@@ -238,6 +247,7 @@ def build(ds: xr.Dataset, cfg: dict | None = None, verbose: bool = True) -> dict
         "depths": np.asarray(ds["depth"].values, dtype=np.float32),
         "channels": np.array(channel_names(cfg)),
         "train_days": tr_d, "val_days": va_d, "argo_days": ar_d,
+        **clim.pack(),
     }
 
 
