@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OceanEmbed</title>
+<style>
+  :root{
+    --bg:#0a0f1a; --panel:#111a2b; --line:#1e2b42;
+    --ink:#e8eef7; --dim:#8fa3bf; --accent:#4da3ff; --warn:#ffb454;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{padding:26px 30px 18px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:26px;letter-spacing:-.02em}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--dim);margin-top:6px;max-width:70ch}
+  main{padding:22px 30px 60px;max-width:1400px}
+  .row{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:22px}
+  @media(max-width:1050px){.row{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .card h2{margin:0 0 12px;font-size:15px;font-weight:600;letter-spacing:.02em;color:var(--dim);
+           text-transform:uppercase}
+  canvas{width:100%;height:auto;display:block;image-rendering:pixelated;border-radius:6px;
+         background:#060a12;cursor:crosshair}
+  .ctl{display:flex;align-items:center;gap:12px;margin:12px 0 4px;flex-wrap:wrap}
+  .ctl label{color:var(--dim);min-width:52px;font-size:13px}
+  input[type=range]{flex:1;min-width:150px;accent-color:var(--accent)}
+  .val{font-variant-numeric:tabular-nums;min-width:96px;font-weight:600}
+  .tabs{display:flex;gap:6px}
+  .tabs button{background:#16203400;border:1px solid var(--line);color:var(--dim);
+    padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:#04101f;font-weight:600}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:4px}
+  .stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+  .stat small{color:var(--dim);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}
+  th,td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  .pos{color:#5fd39b}.neg{color:#ff7b72}
+  .note{color:var(--dim);font-size:13px;margin-top:10px}
+  .warnbox{border-left:3px solid var(--warn);padding:10px 14px;margin-top:14px;
+           background:#1a1608;border-radius:0 6px 6px 0;font-size:13.5px}
+  .legend{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--dim)}
+  .bar{height:10px;flex:1;border-radius:3px}
+  footer{color:var(--dim);font-size:13px;padding:0 30px 40px;max-width:1400px}
+  code{background:#0d1524;padding:1px 5px;border-radius:4px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ocean<span>Embed</span> &mdash; subsurface temperature from satellites</h1>
+  <div class="sub">Temperature at 15 depths from 0 to 1000 m across the North Indian Ocean,
+    reconstructed from surface observations alone: SST, salinity, sea level, currents and wind.
+    <span id="domain"></span></div>
+</header>
+
+<main>
+<div class="row">
+  <div class="card">
+    <h2>Basin temperature</h2>
+    <div class="tabs" id="modes">
+      <button data-m="0" class="on">Predicted</button>
+      <button data-m="1">Reference (GLORYS)</button>
+      <button data-m="2">Difference</button>
+    </div>
+    <canvas id="map" width="241" height="101"></canvas>
+    <div class="legend"><span id="lo"></span><div class="bar" id="cbar"></div><span id="hi"></span></div>
+    <div class="ctl">
+      <label for="depth">Depth</label>
+      <input type="range" id="depth" min="0" max="14" value="7">
+      <span class="val" id="depthv"></span>
+    </div>
+    <div class="ctl">
+      <label for="date">Date</label>
+      <input type="range" id="date" min="0" max="0" value="0">
+      <span class="val" id="datev"></span>
+    </div>
+    <div class="note">Click anywhere on the map to read the profile beneath that point.</div>
+  </div>
+
+  <div class="card">
+    <h2>Temperature profile</h2>
+    <svg id="prof" viewBox="0 0 340 400" width="100%"></svg>
+    <div id="profmeta" class="note"></div>
+  </div>
+</div>
+
+<div class="row" style="margin-top:22px">
+  <div class="card">
+    <h2>Accuracy on held-out days</h2>
+    <div class="stats" id="stats"></div>
+    <table id="perdepth" style="margin-top:14px"></table>
+  </div>
+
+  <div class="card">
+    <h2>Where it works &mdash; and where it does not</h2>
+    <table id="clim"></table>
+    <div class="warnbox">
+      <b>Skill above climatology</b> compares the model against simply predicting the average
+      profile for that location, which needs no satellite data at all.
+      Positive means the surface observations genuinely add information.
+      <b>Below about 300 m it turns negative</b>: the surface stops constraining temperature
+      that deep, so we do not claim skill there. That is physics, not a defect &mdash;
+      and it is the range that matters operationally (cyclone heat content and the
+      thermocline both sit in the upper 200 m).
+    </div>
+  </div>
+</div>
+</main>
+
+<footer>
+  Trained on GLORYS reanalysis, evaluated on days never seen in training.
+  Every value shown is precomputed &mdash; the page runs no model and needs no server.
+</footer>
+
+<script>
+// ---- viridis, sampled ------------------------------------------------------
+const VIRIDIS=[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],
+  [31,158,137],[53,183,121],[109,205,89],[180,222,44],[253,231,37]];
+const DIVERGE=[[33,102,172],[103,169,207],[209,229,240],[247,247,247],
+  [253,219,199],[239,138,98],[178,24,43]];
+function ramp(t,tbl){
+  t=Math.max(0,Math.min(1,t));
+  const x=t*(tbl.length-1), i=Math.floor(x), f=x-i;
+  const a=tbl[i], b=tbl[Math.min(i+1,tbl.length-1)];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+function cssRamp(tbl){
+  return "linear-gradient(90deg,"+tbl.map(c=>`rgb(${c})`).join(",")+")";
+}
+
+// ---- state -----------------------------------------------------------------
+let IX=null, DAY=null, dayIdx=-1, mode=0, pick=null;
+const $=id=>document.getElementById(id);
+
+async function loadIndex(){
+  IX = await (await fetch("data/index.json")).json();
+  $("domain").textContent = "Domain " + IX.domain + ".";
+  $("date").max = IX.dates.length-1;
+  $("date").value = IX.dates.length-1;
+  buildStats(); buildPerDepth(); buildClim();
+  await loadDay(IX.dates.length-1);
+  pick = openOnOcean();
+  draw(); drawProfile();
+}
+
+async function loadDay(i){
+  if(i===dayIdx) return;
+  const buf = await (await fetch(`data/day_${String(i).padStart(3,"0")}.bin`)).arrayBuffer();
+  DAY = new Uint16Array(buf); dayIdx = i;
+}
+const [NZ,NY,NX] = [0,0,0];
+function val(which,z,y,x){
+  const {shape}=IX, nz=shape[0], ny=shape[1], nx=shape[2];
+  const q = DAY[which*nz*ny*nx + z*ny*nx + y*nx + x];
+  return q===0 ? NaN : IX.encoding.t_min + (q-1)*IX.encoding.scale;
+}
+
+// The centre of this grid is central India, and a coastal cell has no profile
+// either, so opening there shows an empty panel. Pick the valid cell furthest
+// from any missing one instead -- a couple of passes of a distance sweep.
+function openOnOcean(){
+  const [nz,ny,nx]=IX.shape, INF=1e9;
+  const d=new Float32Array(ny*nx);
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++)
+    d[y*nx+x]=isFinite(val(0,0,y,x))?INF:0;          // 0 on land/missing
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){        // forward sweep
+    const i=y*nx+x; if(!d[i])continue;
+    if(y===0||x===0||y===ny-1||x===nx-1){d[i]=0;continue;}   // grid edge counts
+    d[i]=Math.min(d[i], d[(y-1)*nx+x]+1, d[y*nx+x-1]+1);
+  }
+  let best=-1,bi=0;
+  for(let y=ny-1;y>=0;y--)for(let x=nx-1;x>=0;x--){  // backward sweep
+    const i=y*nx+x; if(!d[i])continue;
+    if(y<ny-1) d[i]=Math.min(d[i], d[(y+1)*nx+x]+1);
+    if(x<nx-1) d[i]=Math.min(d[i], d[y*nx+x+1]+1);
+    if(d[i]>best){best=d[i];bi=i;}
+  }
+  return [Math.floor(bi/nx), bi%nx];
+}
+
+// ---- map -------------------------------------------------------------------
+function draw(){
+  const z=+$("depth").value, [nz,ny,nx]=IX.shape;
+  const cv=$("map"), ctx=cv.getContext("2d");
+  const img=ctx.createImageData(nx,ny);
+  let lo=Infinity, hi=-Infinity;
+  const buf=new Float32Array(ny*nx);
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    let v;
+    if(mode===2){ const a=val(0,z,y,x), b=val(1,z,y,x); v=a-b; }
+    else v=val(mode,z,y,x);
+    buf[y*nx+x]=v;
+    if(isFinite(v)){ if(v<lo)lo=v; if(v>hi)hi=v; }
+  }
+  if(mode===2){ const m=Math.max(Math.abs(lo),Math.abs(hi))||1; lo=-m; hi=m; }
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    // latitude increases upward, image rows go downward
+    const v=buf[y*nx+x], o=((ny-1-y)*nx+x)*4;
+    if(!isFinite(v)){ img.data[o]=13;img.data[o+1]=21;img.data[o+2]=34;img.data[o+3]=255; continue; }
+    const c=ramp((v-lo)/(hi-lo||1), mode===2?DIVERGE:VIRIDIS);
+    img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  if(pick){ ctx.strokeStyle="#fff"; ctx.lineWidth=1;
+    const px=pick[1], py=ny-1-pick[0];
+    ctx.beginPath(); ctx.moveTo(px-4,py); ctx.lineTo(px+4,py);
+    ctx.moveTo(px,py-4); ctx.lineTo(px,py+4); ctx.stroke(); }
+  $("lo").textContent=lo.toFixed(1)+"°C";
+  $("hi").textContent=hi.toFixed(1)+"°C";
+  $("cbar").style.background=cssRamp(mode===2?DIVERGE:VIRIDIS);
+  $("depthv").textContent=IX.depths[z].toFixed(0)+" m";
+  $("datev").textContent=IX.dates[+$("date").value];
+}
+
+// ---- profile ---------------------------------------------------------------
+function drawProfile(){
+  const [nz,ny,nx]=IX.shape, svg=$("prof");
+  if(!pick){ svg.innerHTML=""; return; }
+  const [y,x]=pick;
+  const p=[],r=[];
+  for(let z=0;z<nz;z++){ p.push(val(0,z,y,x)); r.push(val(1,z,y,x)); }
+  const ok=p.concat(r).filter(isFinite);
+  if(!ok.length){ svg.innerHTML='<text x="20" y="40" fill="#8fa3bf" font-size="13">'+
+      'No data at this point (land, or too close to the coast).</text>';
+    $("profmeta").textContent=""; return; }
+
+  const L=52,R=14,T=14,B=34,W=340,H=400;
+  const tmin=Math.floor(Math.min(...ok)-1), tmax=Math.ceil(Math.max(...ok)+1);
+  const zmax=IX.depths[nz-1];
+  const sx=v=>L+(v-tmin)/(tmax-tmin)*(W-L-R);
+  // sqrt depth axis: gives the upper ocean, where the structure is, more room
+  const sy=d=>T+Math.sqrt(d/zmax)*(H-T-B);
+  let s='';
+  for(let g=tmin;g<=tmax;g+=Math.max(1,Math.round((tmax-tmin)/5))){
+    s+=`<line x1="${sx(g)}" y1="${T}" x2="${sx(g)}" y2="${H-B}" stroke="#1e2b42"/>`;
+    s+=`<text x="${sx(g)}" y="${H-B+16}" fill="#8fa3bf" font-size="11" text-anchor="middle">${g}</text>`;
+  }
+  for(const d of [0,50,150,300,600,1000]){
+    s+=`<line x1="${L}" y1="${sy(d)}" x2="${W-R}" y2="${sy(d)}" stroke="#1e2b42"/>`;
+    s+=`<text x="${L-7}" y="${sy(d)+4}" fill="#8fa3bf" font-size="11" text-anchor="end">${d}</text>`;
+  }
+  const path=a=>a.map((v,i)=>(isFinite(v)?(i?"L":"M")+sx(v)+","+sy(IX.depths[i]):"")).join(" ");
+  s+=`<path d="${path(r)}" fill="none" stroke="#e8eef7" stroke-width="2"/>`;
+  s+=`<path d="${path(p)}" fill="none" stroke="#4da3ff" stroke-width="2"/>`;
+  for(let i=0;i<nz;i++){
+    if(isFinite(r[i])) s+=`<circle cx="${sx(r[i])}" cy="${sy(IX.depths[i])}" r="2.4" fill="#e8eef7"/>`;
+    if(isFinite(p[i])) s+=`<circle cx="${sx(p[i])}" cy="${sy(IX.depths[i])}" r="2.4" fill="#4da3ff"/>`;
+  }
+  s+=`<rect x="${W-118}" y="${T+4}" width="104" height="38" fill="#0a0f1a" stroke="#1e2b42" rx="4"/>`;
+  s+=`<line x1="${W-110}" y1="${T+16}" x2="${W-92}" y2="${T+16}" stroke="#4da3ff" stroke-width="2"/>`;
+  s+=`<text x="${W-87}" y="${T+20}" fill="#e8eef7" font-size="11">predicted</text>`;
+  s+=`<line x1="${W-110}" y1="${T+32}" x2="${W-92}" y2="${T+32}" stroke="#e8eef7" stroke-width="2"/>`;
+  s+=`<text x="${W-87}" y="${T+36}" fill="#e8eef7" font-size="11">reference</text>`;
+  s+=`<text x="14" y="${H-6}" fill="#8fa3bf" font-size="11">temperature (°C)</text>`;
+  s+=`<text transform="translate(13,${T+50}) rotate(-90)" fill="#8fa3bf" font-size="11">depth (m)</text>`;
+  svg.innerHTML=s;
+
+  const la=IX.lat[0]+(IX.lat[1]-IX.lat[0])*y/(ny-1);
+  const lo=IX.lon[0]+(IX.lon[1]-IX.lon[0])*x/(nx-1);
+  const diffs=p.map((v,i)=>v-r[i]).filter(isFinite);
+  const rmse=Math.sqrt(diffs.reduce((a,b)=>a+b*b,0)/(diffs.length||1));
+  $("profmeta").innerHTML=`${la.toFixed(2)}°N, ${lo.toFixed(2)}°E &mdash; `+
+    `${IX.dates[dayIdx]} &mdash; profile RMSE <b>${rmse.toFixed(2)} °C</b>`;
+}
+
+// ---- panels ----------------------------------------------------------------
+function buildStats(){
+  const m=IX.metrics, imp=m.baseline_rmse?100*(m.baseline_rmse-m.mean_rmse)/m.baseline_rmse:null;
+  const cell=(v,l)=>`<div class="stat"><b>${v}</b><small>${l}</small></div>`;
+  $("stats").innerHTML =
+    cell(m.mean_corr?.toFixed(3) ?? "-","mean correlation")+
+    cell((m.mean_rmse?.toFixed(3) ?? "-")+" °C","mean RMSE")+
+    cell(m.bands?.thermocline_75_300m?.mean_rmse.toFixed(3)+" °C","thermocline 75-300 m")+
+    (imp!==null?cell("+"+imp.toFixed(0)+"%","better than baseline"):"");
+}
+function buildPerDepth(){
+  let s='<tr><th>depth (m)</th><th>correlation</th><th>RMSE (°C)</th></tr>';
+  for(const r of IX.metrics.per_depth)
+    s+=`<tr><td>${r.depth_m.toFixed(0)}</td><td>${r.corr.toFixed(3)}</td><td>${r.rmse.toFixed(3)}</td></tr>`;
+  $("perdepth").innerHTML=s;
+}
+function buildClim(){
+  const rows=IX.metrics.vs_climatology||[];
+  let s='<tr><th>depth (m)</th><th>model</th><th>climatology</th><th>skill</th></tr>';
+  for(const r of rows){
+    const k=r.skill_vs_clim, cls=k>=0?"pos":"neg";
+    s+=`<tr><td>${r.depth_m.toFixed(0)}</td><td>${r.rmse_model.toFixed(3)}</td>`+
+       `<td>${r.rmse_clim.toFixed(3)}</td><td class="${cls}">${k>=0?"+":""}${k.toFixed(2)}</td></tr>`;
+  }
+  $("clim").innerHTML=s;
+}
+
+// ---- events ----------------------------------------------------------------
+$("depth").oninput=()=>{draw();};
+$("date").oninput=async e=>{ await loadDay(+e.target.value); draw(); drawProfile(); };
+$("map").onclick=e=>{
+  const cv=$("map"), b=cv.getBoundingClientRect(), [nz,ny,nx]=IX.shape;
+  const x=Math.floor((e.clientX-b.left)/b.width*nx);
+  const y=ny-1-Math.floor((e.clientY-b.top)/b.height*ny);
+  pick=[Math.max(0,Math.min(ny-1,y)),Math.max(0,Math.min(nx-1,x))];
+  draw(); drawProfile();
+};
+for(const b of document.querySelectorAll("#modes button")) b.onclick=()=>{
+  document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); mode=+b.dataset.m; draw();
+};
+loadIndex();
+</script>
+</body>
+</html>

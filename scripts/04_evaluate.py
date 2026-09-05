@@ -148,7 +148,6 @@ def main() -> None:
         "note": "independent block -- never used for training or model selection",
     }
     spath = resolve(cfg["paths"]["scorecard"])
-    spath.write_text(json.dumps(card, indent=2), encoding="utf-8")
 
     print(f"\nevaluated on {arX.shape[0]} holdout profiles")
     print(format_table(card))
@@ -171,6 +170,10 @@ def main() -> None:
         print("  spatial map, not surface inference. More months of data is the fix.")
     else:
         print(f"\n  {ms:.1%} better than climatology -- genuine surface-to-depth skill.")
+
+    # Written HERE, after vs_climatology is attached. Writing it earlier dropped
+    # that section from the file even though it printed to the terminal fine.
+    spath.write_text(json.dumps(card, indent=2), encoding="utf-8")
 
     base = load_card(resolve(cfg["paths"]["baseline_scorecard"]))
     if base:
