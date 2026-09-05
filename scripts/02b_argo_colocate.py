@@ -39,8 +39,8 @@ from oceanembed.loaders import open_any
 # EDIT BLOCK
 # ===========================================================================
 
-ARGO_PATH = "data/raw/argo/*.nc"      # gridded ARGO from INCOIS LAS
-ARGO_VAR: str | None = None           # e.g. "TEMP" / "temperature"; None autodetects
+ARGO_PATH = "data/raw/argo/argo_????-??.nc"  # per-month NetCDF files from convert_argo_txt_to_nc.py
+ARGO_VAR: str | None = "TEMP"                # variable name in those NetCDF files
 MAX_PROFILES = 20000                  # cap so the holdout stays a sane size
 
 # ===========================================================================
