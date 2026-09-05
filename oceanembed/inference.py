@@ -92,6 +92,33 @@ class Predictor:
             pred = self.model.predict(Xn, batch=batch)
         return invert_target(pred, self.ym, self.ys)
 
+    def predict_mc(self, X_raw, n: int = 20, p: float = 0.15, seed: int = 0, batch: int = 4096):
+        """Monte-Carlo uncertainty: mean and standard deviation over n passes.
+
+        The network has no dropout layers, so we cannot do classic MC-dropout on
+        it. Instead we resample the INPUT the way the model was trained: with
+        `channel_dropout`, whole variables are blanked 15% of the time, so the
+        model is already calibrated to that perturbation. Spread across passes
+        answers a question an operator actually asks -- "how much does this
+        estimate depend on any single satellite?"
+
+        Returns (mean, std), both (N, 15) in degrees Celsius. Large std means the
+        answer hinges on one input, so treat it with caution.
+        """
+        X = np.asarray(X_raw, dtype=np.float32)
+        rng = np.random.default_rng(seed)
+        acc = []
+        for i in range(n):
+            Xi = X.copy()
+            drop = rng.random(X.shape[1]) < p
+            if drop.all():                       # never blank everything
+                drop[rng.integers(X.shape[1])] = False
+            for c in np.nonzero(drop)[0]:
+                Xi[:, c] = self.xm[0, c]         # the mean is the no-information value
+            acc.append(self.predict(Xi, batch=batch))
+        A = np.stack(acc)
+        return A.mean(axis=0), A.std(axis=0)
+
     def embed(self, X_raw: np.ndarray) -> np.ndarray:
         """The 128-d latent -- the 'embedding' the architecture is named for."""
         Xn, _ = apply_scalers(np.asarray(X_raw, dtype=np.float32), None,
