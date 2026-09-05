@@ -14,4 +14,7 @@ data/processed/
 *.pt
 outputs/*.png
 outputs/*.json
+# keep the synthetic baseline results for comparison
+!outputs/synthetic/
+outputs/synthetic/*.pt
 .DS_Store
