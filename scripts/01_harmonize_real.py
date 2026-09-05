@@ -81,11 +81,11 @@ def inspect(path_glob: str, canonical: str, var: str | None) -> None:
         if sample.size:
             print(f"         range     {sample.min():.3f} .. {sample.max():.3f} "
                   f"{'(looks like KELVIN -- will be converted)' if np.median(sample) > 100 else ''}")
-            if "depth" in sub.dims:
+            if "depth" in sub.dims and sub.sizes["depth"] > 1:
                 prof = sub.mean(dim=[d for d in sub.dims if d != "depth"], skipna=True)
                 zz = np.asarray(sub["depth"].values, dtype=float)
                 tt = np.asarray(prof.values, dtype=float)
-                shown = [0, len(zz) // 3, 2 * len(zz) // 3, len(zz) - 1]
+                shown = sorted(set([0, len(zz) // 3, 2 * len(zz) // 3, len(zz) - 1]))
                 pairs = "  ".join(f"{zz[i]:.0f}m={tt[i]:.1f}" for i in shown)
                 print(f"         profile   {pairs}  (should decrease with depth)")
     ds.close()

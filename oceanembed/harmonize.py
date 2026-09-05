@@ -194,6 +194,15 @@ def daily_resample(obj, cfg: dict | None = None):
     if cfg["domain"].get("temporal", "daily") != "daily" or "time" not in getattr(obj, "dims", {}):
         return obj
     obj = obj.resample(time="1D").mean()
+    # open_mfdataset gives one dask chunk per file, but interpolate_na treats
+    # time as a core dimension and needs it in a single chunk. By this point the
+    # field is already regridded to 0.25 deg, so the whole time axis is only a
+    # few MB -- cheap to combine.
+    if getattr(obj, "chunks", None):
+        try:
+            obj = obj.chunk({"time": -1})
+        except Exception:
+            obj = obj.load()
     obj = obj.interpolate_na(dim="time", method="linear", use_coordinate=False)
     if isinstance(obj, xr.Dataset):
         return obj.map(lambda d: _fill_edges(d, "time"))
