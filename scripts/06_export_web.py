@@ -8,7 +8,8 @@ fixed domain, so every answer it could give is computed once, here.
 
 Output:
     index.json     dates, depths, grid, scaling, headline metrics
-    day_000.bin    uint16 [2, 15, ny, nx] -- [prediction, reference]
+    day_000.bin    uint16 [2, 15, ny, nx]  temperature  [prediction, reference]
+                   then float32 [2, 3, ny, nx] products [TCHP, D26, MLD], appended
 
 uint16 with a scale/offset rather than float16, because Uint16Array works in
 every browser while Float16Array does not. 0 is the missing-data sentinel, so
@@ -31,6 +32,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from oceanembed import ensure_dirs, load_config, resolve
 from oceanembed.evaluate import load_card
 from oceanembed.inference import Predictor
+from oceanembed.products import d26, mld, tchp
 
 T_MIN, T_MAX = -2.0, 40.0          # covers every ocean temperature we will meet
 SCALE = (T_MAX - T_MIN) / 65533.0
@@ -108,8 +110,21 @@ def main() -> None:
             y = pred_.predict(patches)                                     # (n,nz)
             pred[:, iy + half, ix + half] = y.T
 
+        # Operational products, computed per cell from the SAME profiles. This is
+        # what a forecaster acts on -- TCHP above ~50 kJ/cm2 is the cyclone
+        # rapid-intensification threshold.
+        prod = np.full((2, 3, ny, nx), np.nan, np.float32)
+        for w, field in ((0, pred), (1, ref)):
+            flat = field.reshape(nz, -1).T                                  # (ny*nx, nz)
+            good = np.isfinite(flat).all(axis=1)
+            if good.any():
+                g = flat[good]
+                prod[w, 0].reshape(-1)[good] = tchp(g, depths)
+                prod[w, 1].reshape(-1)[good] = d26(g, depths)
+                prod[w, 2].reshape(-1)[good] = mld(g, depths)
+
         stack = np.stack([encode(pred), encode(ref)])                      # (2,nz,ny,nx)
-        (out_dir / f"day_{it:03d}.bin").write_bytes(stack.tobytes())
+        (out_dir / f"day_{it:03d}.bin").write_bytes(stack.tobytes() + prod.tobytes())
         dates.append(str(np.datetime64(times[it], "D")))
         if (it + 1) % 10 == 0 or it == n_days - 1:
             print(f"  {it + 1}/{n_days} days")
@@ -123,6 +138,14 @@ def main() -> None:
         "lat": [float(lat[0]), float(lat[-1])],
         "lon": [float(lon[0]), float(lon[-1])],
         "encoding": {"t_min": T_MIN, "scale": SCALE, "missing": 0},
+        "products": {
+            "names": ["TCHP", "D26", "MLD"],
+            "units": ["kJ/cm2", "m", "m"],
+            "labels": ["Cyclone heat potential", "26 degC isotherm depth", "Mixed layer depth"],
+            "byte_offset": int(2 * nz * ny * nx * 2),   # after the uint16 temperature block
+            "dtype": "float32",
+            "shape": [2, 3, int(ny), int(nx)],
+        },
         "metrics": {
             "mean_corr": card.get("mean_corr"),
             "mean_rmse": card.get("mean_rmse"),

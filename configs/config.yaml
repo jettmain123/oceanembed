@@ -37,6 +37,10 @@ train:
   weight_decay: 1.0e-2
   val_fraction: 0.15
   seed: 42
+  # blank a whole input channel this often during training. Makes the model
+  # usable when a satellite is down, and regularises it as a side effect --
+  # measured 3-4x more robust AND slightly more accurate. See 03d.
+  channel_dropout: 0.15
   # per-depth loss weights: up-weight the thermocline (50-300 m) where the
   # signal is hardest and most scientifically interesting
   depth_weights: [1.0, 1.0, 1.0, 1.1, 1.2, 1.5, 1.8, 2.0, 2.0, 2.0, 1.8, 1.5, 1.0, 0.8, 0.6]
@@ -51,6 +55,10 @@ dataset:
   max_samples_per_day: 400  # subsample ocean cells per day to keep memory sane
   argo_fraction: 0.15       # fraction of days reserved as the ARGO-style holdout
   seed: 42
+  # blank a whole input channel this often during training. Makes the model
+  # usable when a satellite is down, and regularises it as a side effect --
+  # measured 3-4x more robust AND slightly more accurate. See 03d.
+  channel_dropout: 0.15
 
 paths:
   raw: data/raw

@@ -69,7 +69,13 @@
 <div class="row">
   <div class="card">
     <h2>Basin temperature</h2>
-    <div class="tabs" id="modes">
+    <div class="tabs" id="layers">
+      <button data-l="T" class="on">Temperature</button>
+      <button data-l="0">Cyclone heat (TCHP)</button>
+      <button data-l="1">26&deg;C isotherm</button>
+      <button data-l="2">Mixed layer</button>
+    </div>
+    <div class="tabs" id="modes" style="margin-top:7px">
       <button data-m="0" class="on">Predicted</button>
       <button data-m="1">Reference (GLORYS)</button>
       <button data-m="2">Difference</button>
@@ -186,7 +192,7 @@ const BASEMAPS={
          ref: ESRI+"/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}"},
 };
 
-let IX=null, DAY=null, dayIdx=-1, mode=0, pick=null, map=null, ready=false;
+let IX=null, DAY=null, PROD=null, dayIdx=-1, mode=0, layer='T', pick=null, map=null, ready=false;
 let cv=document.createElement("canvas"), lastLo=0, lastHi=1;
 const $=id=>document.getElementById(id);
 
@@ -195,6 +201,11 @@ function val(which,z,y,x){
   if(y<0||x<0||y>=ny||x>=nx) return NaN;
   const q=DAY[which*nz*ny*nx + z*ny*nx + y*nx + x];
   return q===0?NaN:IX.encoding.t_min+(q-1)*IX.encoding.scale;
+}
+function pval(which,k,y,x){
+  const [nz,ny,nx]=IX.shape;
+  const v=PROD[which*3*ny*nx + k*ny*nx + y*nx + x];
+  return Number.isFinite(v)?v:NaN;
 }
 // grid <-> geography. lat[0] is the SOUTH edge.
 const latOf=y=>IX.lat[0]+(IX.lat[1]-IX.lat[0])*y/(IX.shape[1]-1);
@@ -218,7 +229,10 @@ async function loadIndex(){
 async function loadDay(i){
   if(i===dayIdx) return;
   const buf=await (await fetch(`data/day_${String(i).padStart(3,"0")}.bin`)).arrayBuffer();
-  DAY=new Uint16Array(buf); dayIdx=i;
+  const off=IX.products.byte_offset;
+  DAY=new Uint16Array(buf,0,off/2);
+  PROD=new Float32Array(buf,off);          // [2,3,ny,nx] TCHP, D26, MLD
+  dayIdx=i;
 }
 
 // ---- render the field to a canvas, then hand it to MapLibre as an image -----
@@ -227,9 +241,11 @@ function renderCanvas(){
   const ctx=cv.getContext("2d"), img=ctx.createImageData(nx,ny);
   const buf=new Float32Array(ny*nx);
   let lo=Infinity,hi=-Infinity;
+  const isT=(layer==="T"), k=isT?0:+layer;
+  const get=(w,y,x)=>isT?val(w,z,y,x):pval(w,k,y,x);
   for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
     let v;
-    if(mode===2){ v=val(0,z,y,x)-val(1,z,y,x); } else v=val(mode,z,y,x);
+    if(mode===2){ v=get(0,y,x)-get(1,y,x); } else v=get(mode,y,x);
     buf[y*nx+x]=v;
     if(isFinite(v)){ if(v<lo)lo=v; if(v>hi)hi=v; }
   }
@@ -244,7 +260,7 @@ function renderCanvas(){
   }
   ctx.putImageData(img,0,0);
   lastLo=lo; lastHi=hi;
-  const u=mode===2?" °C diff":" °C";
+  const u=(isT?" °C":" "+IX.products.units[k])+(mode===2?" diff":"");
   $("lo").textContent=lo.toFixed(1)+u;
   $("hi").textContent=hi.toFixed(1)+u;
   $("cbar").style.background=cssRamp(mode===2?DIVERGE:VIRIDIS);
@@ -342,14 +358,26 @@ function readout(){
     $("twhere").textContent="That point is land, or too close to the coast for a 9x9 patch.";
     $("tcmp").innerHTML=""; return;
   }
-  $("tval").innerHTML=(isFinite(p)?p.toFixed(2):"--")+" <span style='font-size:20px'>°C</span>";
+  const isT=(layer==="T"), k=isT?0:+layer;
+  const P0=isT?p:pval(0,k,y,x), R0=isT?r:pval(1,k,y,x);
+  const unit=isT?"°C":IX.products.units[k];
+  $("tval").innerHTML=(isFinite(P0)?P0.toFixed(isT?2:1):"--")+
+                      ` <span style='font-size:20px'>${unit}</span>`;
+  const what=isT?`${IX.depths[z].toFixed(0)} m depth`:IX.products.labels[k];
   $("twhere").innerHTML=`${latOf(y).toFixed(2)}°N, ${lonOf(x).toFixed(2)}°E &nbsp;·&nbsp; `+
-                        `${IX.depths[z].toFixed(0)} m depth &nbsp;·&nbsp; ${IX.dates[dayIdx]}`;
-  const d=p-r;
+                        `${what} &nbsp;·&nbsp; ${IX.dates[dayIdx]}`;
+  const d=P0-R0, tol=isT?0.5:(k===0?10:15);
+  let extra="";
+  if(!isT&&k===0&&isFinite(P0)){
+    // 50 kJ/cm2 is the rule-of-thumb rapid-intensification threshold
+    extra=P0>=50?`<span style="color:#ff7b72"><b>above the 50 kJ/cm² cyclone threshold</b></span>`
+                :`<span style="color:#5fd39b">below the 50 kJ/cm² threshold</span>`;
+  }
   $("tcmp").innerHTML=
-    `<span>reference <b>${isFinite(r)?r.toFixed(2)+" °C":"--"}</b></span>`+
-    `<span>difference <b class="${Math.abs(d)<0.5?'pos':'neg'}">`+
-    `${isFinite(d)?(d>=0?"+":"")+d.toFixed(2)+" °C":"--"}</b></span>`;
+    `<span>reference <b>${isFinite(R0)?R0.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
+    `<span>difference <b class="${Math.abs(d)<tol?'pos':'neg'}">`+
+    `${isFinite(d)?(d>=0?"+":"")+d.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
+    (extra?`<span>${extra}</span>`:"");
 }
 
 // ---- profile ---------------------------------------------------------------
@@ -451,6 +479,14 @@ $("basemap").onchange=e=>{
 $("region").onchange=e=>{
   const b=REGIONS[+e.target.value][1];
   map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:24,duration:700});
+};
+for(const b of document.querySelectorAll("#layers button")) b.onclick=()=>{
+  document.querySelectorAll("#layers button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); layer=b.dataset.l;
+  const off=(layer!=="T");
+  $("depth").disabled=off;
+  $("depth").parentElement.style.opacity=off?.4:1;
+  refresh();
 };
 for(const b of document.querySelectorAll("#modes button")) b.onclick=()=>{
   document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));

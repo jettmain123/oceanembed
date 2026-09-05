@@ -30,6 +30,11 @@ def main() -> None:
     ap.add_argument("--backend", type=str, default="auto", choices=["auto", "torch", "numpy"])
     ap.add_argument("--batch-size", type=int, default=None)
     ap.add_argument("--lr", type=float, default=None)
+    ap.add_argument("--channel-dropout", type=float, default=None,
+                    help="probability of blanking a whole input channel per sample. "
+                         "Teaches the model to cope when a satellite is down or a "
+                         "product has a gap -- something an assimilation system "
+                         "cannot do without a full rerun.")
     ap.add_argument("--seed", type=int, default=None,
                     help="override the config seed -- use several to check a result is not noise")
     ap.add_argument("--device", type=str, default="auto",
@@ -45,6 +50,8 @@ def main() -> None:
     lr = args.lr or float(cfg["train"]["lr"])
     wd = float(cfg["train"]["weight_decay"])
     seed = args.seed if args.seed is not None else int(cfg["train"]["seed"])
+    cdrop = (args.channel_dropout if args.channel_dropout is not None
+             else float(cfg["train"].get("channel_dropout", 0.0)))
 
     dpath = resolve(cfg["paths"]["dataset"])
     if not dpath.exists():
@@ -64,7 +71,8 @@ def main() -> None:
     use_torch = torch_available() if args.backend == "auto" else (args.backend == "torch")
     print(describe())
     print(f"train {trX.shape}  val {vaX.shape}  channels {n_ch}  patch {P}  depths {depths.size}")
-    print(f"epochs {epochs}  batch {batch}  lr {lr}  wd {wd}  encoder {cfg['model']['encoder']}")
+    print(f"epochs {epochs}  batch {batch}  lr {lr}  wd {wd}  encoder {cfg['model']['encoder']}"
+          f"  channel_dropout {cdrop}")
 
     t0 = time.time()
     out_dir = resolve(cfg["paths"]["outputs"])
@@ -120,6 +128,13 @@ def main() -> None:
             for s in range(0, n_train, batch):
                 idx = perm[s:s + batch]
                 xb, yb = tr_x[idx], tr_y[idx]
+                if cdrop > 0:
+                    # blank whole channels, not pixels: a missing satellite loses
+                    # an entire variable. Inputs are standardised, so zero is the
+                    # channel mean -- the honest "no information" value.
+                    m = (torch.rand(xb.shape[0], xb.shape[1], 1, 1, device=dev)
+                         >= cdrop).float()
+                    xb = xb * m
                 opt.zero_grad(set_to_none=True)
                 loss = weighted_mse(model(xb), yb, wt)
                 loss.backward()
@@ -173,6 +188,7 @@ def main() -> None:
                     "device": str(dev) if use_torch else "cpu",
                     "encoder": cfg["model"]["encoder"] if use_torch else "numpy_mlp",
                     "epochs": epochs, "best_val_loss": float(best),
+                    "channel_dropout": cdrop,
                     "seconds": round(dt, 1), "history": history}, indent=2),
         encoding="utf-8",
     )
