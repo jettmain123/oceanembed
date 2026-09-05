@@ -2,9 +2,12 @@
 
 Read this first, then open the file for your job.
 
-- Person 1 -> `PERSON1_DATA.md` (gets the real ocean data)
-- Person 2 -> `PERSON2_MODEL.md` (improves the model)
-- Person 3 -> `PERSON3_RESULTS.md` (results, demo, slides)
+- Person 1 -> `PERSON1_DATA.md` (Copernicus downloads: SST, SSS, SLA, GLORYS)
+- Person 2 -> `PERSON2_MODEL.md` (model training and experiments)
+- Person 3 -> `PERSON3_RESULTS.md` (results, slides, report)
+- Person 4 -> `WEBSITE.md` (the frontend, and the PODAAC downloads first)
+
+Current results on real data: `REAL_DATA_RESULTS.md`.
 
 ## What this project does
 
@@ -53,10 +56,16 @@ ignored by git.
 ## How the work fits together
 
 ```
-Person 1  downloads real data  ->  makes harmonized.nc  ->  sends it to others
-Person 2  improves the model   (works right away, does not wait for Person 1)
-Person 3  makes results/slides (works right away, does not wait for Person 1)
+Person 1  Copernicus downloads (SST, SSS, SLA, GLORYS)  ->  harmonized.nc
+Person 4  PODAAC downloads (currents, winds) + ARGO     ->  sends to Person 1
+             then switches to building the website
+Person 2  trains the model                (never waits)
+Person 3  results, slides, report         (never waits)
 ```
+
+Persons 1 and 4 download from DIFFERENT servers with DIFFERENT logins, so they
+genuinely run in parallel. Splitting Copernicus across two machines would just
+throttle one account.
 
 Only Person 1 has to wait for anything. Person 2 and Person 3 start now using
 the practice data, and simply re-run their commands later when the real data
