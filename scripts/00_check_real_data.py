@@ -312,6 +312,9 @@ def main():
     print("it just needs a point-based co-location step instead of 02b. Say so and it can be")
     print("written. You can train and evaluate without it in the meantime.")
 
+    # exit code, so a collection script can branch on this instead of parsing text
+    return 1 if _tally[BAD] else 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

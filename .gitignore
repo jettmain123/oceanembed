@@ -8,6 +8,8 @@ venv/
 # Data + model artefacts are regenerated, never committed
 data/raw/
 data/processed/
+to_upload/
+logs/
 *.nc
 *.npz
 *.parquet

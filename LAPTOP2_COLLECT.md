@@ -87,52 +87,32 @@ reprocessed ones throughout. `cmems_mod_glo_phy_my_0.25deg_P1D-m` does not
 exist; 1/12 degree is the only GLORYS in this stream, roughly 0.5 GB per month
 for `thetao` alone.
 
-## Download your months
-
-One command per month. It works out the last day itself, subsets server-side,
-and prints a summary telling you if anything failed:
+## Download everything -- one command
 
 ```
-bash scripts/download/download_month.sh 2022-01
+bash scripts/download/laptop2.sh
 ```
 
-Repeat for each of your months.
+That is the whole job. For each of your months it downloads all six products,
+checks them, harmonizes them, verifies the profile decreases with depth, and
+stages the cube in `to_upload/`. Expect a few hours, mostly GLORYS.
 
----
+**Safe to stop and rerun.** Months already finished are skipped, so a closed
+laptop or a dropped connection costs you one month, not the whole run. If
+something fails it says which month and why, and keeps going with the rest.
 
-## Check, harmonize, upload -- ONE MONTH AT A TIME
+Per-month logs land in `logs/` if you need detail.
 
-Do not download all your months and harmonize at the end. Do one month fully,
-upload it, then start the next. That way a problem shows up after 20 minutes
-instead of after a day, and the training laptop can start early.
+When it finishes, upload everything in `to_upload/` to the shared Drive folder
+`oceanembed/harmonized/`. Those files are your entire deliverable -- never
+upload raw downloads or `dataset.npz`.
+
+### If you would rather do one month at a time
 
 ```
+bash scripts/download/download_month.sh 2022-04
 python scripts/00_check_real_data.py
-```
-
-Fix anything marked FAIL; it names the product and the reason. Then:
-
-```
 python scripts/01_harmonize_real.py
-```
-
-Read the profile it prints. It **must** fall from roughly 28-30 degC at the
-surface to about 5-9 degC at 1000 m. If it rises anywhere, stop and report it --
-do not upload.
-
-```
-mv data/processed/harmonized.nc harmonized_$M.nc
-```
-
-Upload `harmonized_$M.nc` (~23 MB) to the shared Drive folder
-`oceanembed/harmonized/`. That file is your entire deliverable. Never upload raw
-downloads or `dataset.npz`.
-
-Then clear the raw folders before the next month, so `01_harmonize_real.py`
-only ever sees one month at a time:
-
-```
-rm -f data/raw/*/*.nc
 ```
 
 ## Then post in the group
