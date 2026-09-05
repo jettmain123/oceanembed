@@ -25,7 +25,8 @@ and down. Your main job is to PROVE that the square is what makes us better.
 python scripts/03_train.py
 ```
 
-Takes about 10 minutes on a normal laptop. Then:
+Takes about 35 seconds on an NVIDIA GPU, or about 10 minutes on CPU. The script
+prints which device it is using on the first few lines - check that. Then:
 
 ```
 python scripts/03b_baseline.py
@@ -228,7 +229,9 @@ practice data.
 
 ## If something goes wrong
 
-**Training takes too long** - use `--epochs 5` while testing that a command
+**Training takes too long** - check the `device:` line it prints. If it says
+`cpu` and you have an NVIDIA GPU, see the GPU note at the bottom; that is a
+17x speed difference. Otherwise use `--epochs 5` while testing that a command
 works, then run the full thing once.
 
 **Out of memory** - in `configs/config.yaml`, lower
