@@ -6,6 +6,7 @@ Works identically on the synthetic and the real harmonized cube.
 """
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -19,7 +20,16 @@ from oceanembed.dataset import build, channel_names
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--max-per-day", type=int, default=None,
+                    help="ocean cells sampled per day (default: dataset.max_samples_per_day "
+                         "in config). Raise it when you have few DAYS but many cells.")
+    args = ap.parse_args()
+
     cfg = load_config()
+    if args.max_per_day:
+        cfg["dataset"]["max_samples_per_day"] = args.max_per_day
+        print(f"[dataset] sampling up to {args.max_per_day} cells per day")
     ensure_dirs(cfg)
     src = resolve(cfg["paths"]["harmonized"])
     out = resolve(cfg["paths"]["dataset"])
