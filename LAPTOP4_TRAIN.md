@@ -2,29 +2,36 @@
 
 You collect nothing. You wait for cubes, merge them, train, and report numbers.
 
-## The season plan
+## The collection plan
 
-Six months spanning a full seasonal cycle, all from the same product streams:
+Twelve months spread across three years -- one per season, per year:
 
-| month | monsoon phase | who |
+| year | months | who |
 |---|---|---|
-| Dec 2023 | NE monsoon | Laptop 1 |
-| Feb 2024 | late NE monsoon | Laptop 1 |
-| Apr 2024 | spring transition, warmest | Laptop 2 |
-| Jun 2024 | SW monsoon onset | Laptop 2 |
-| Aug 2024 | SW monsoon peak | Laptop 3 |
-| Sep 2024 | SW monsoon decay | Laptop 3 |
-| **Oct 2024** | fall transition | **already have it** |
+| 2022 | Jan, Apr, Jul, Oct | Laptop 1 |
+| 2023 | Jan, Apr, Jul, Oct | Laptop 2 |
+| 2024 | Jan, Apr, Jul | Laptop 3 |
+| 2024 | **Oct** | already have it |
 
-About 210 days covering every phase of the monsoon. That is the point: with only
-October, the deep ocean barely changes, so "the average temperature here" explains
-most of the variance and there is little for the model to actually infer. Spanning
-seasons is what forces it to read the surface.
+About 360 days covering every season in every year.
 
-Deliberately inside the last 12 months so every month comes from the same
-near-real-time streams October used. Reaching further back would cross into the
-reprocessed products, which do not agree exactly and would put artificial jumps
-in the data.
+**Why four months a year and not all 36 months.** Consecutive days are nearly
+identical -- 15 April tells the model almost the same thing as 16 April. What
+breaks the climatology shortcut is spanning SEASONS and YEARS, not filling every
+date. Four scattered months per year gets essentially the same information for a
+third of the download, transfer and training cost. If collection turns out to be
+fast, adding more months is easy; the merge script does not care.
+
+**Why a year each rather than a season each.** If a laptop drops out we lose one
+year and keep two full seasonal cycles. Splitting by season instead would mean
+losing, say, every winter.
+
+**The product-consistency risk.** Copernicus runs a near-real-time stream and a
+reprocessed one, and they disagree slightly. October 2024 came from NRT. If the
+same product does not cover 2022 as well, the collectors have been told to report
+it rather than substitute -- mixing streams would put artificial jumps in the
+data that the model would learn as real signal. **A consistent 18 months beats an
+inconsistent 3 years.** Expect to hear about this; decide as a team.
 
 ## As cubes arrive
 
