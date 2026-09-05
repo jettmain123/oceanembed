@@ -110,11 +110,20 @@ def normalize_coords(obj: xr.Dataset | xr.DataArray) -> xr.Dataset | xr.DataArra
     return obj
 
 
-def _fill_edges(da: xr.DataArray, dim: str) -> xr.DataArray:
-    """Forward- then backward-fill NaNs along `dim` using pure NumPy.
+def _fill_edges(da: xr.DataArray, dim: str, direction: str = "both") -> xr.DataArray:
+    """Fill NaNs along `dim` using pure NumPy.
 
     xarray's own ffill/bfill require bottleneck/numbagg; this keeps the pipeline
     dependency-light so it runs on every teammate's machine.
+
+    direction:
+      "both"     forward then backward -- right for a TIME axis, where a missing
+                 day should inherit from its neighbours in either direction.
+      "backward" only fill from deeper values upward -- the ONLY safe choice for
+                 a DEPTH axis. Filling downward would copy the last real value
+                 below the seafloor, inventing deep-ocean temperatures over every
+                 shelf cell. Those NaNs must survive so the dataset builder can
+                 drop the sample instead of training on fiction.
     """
     if dim not in da.dims:
         return da
@@ -124,18 +133,24 @@ def _fill_edges(da: xr.DataArray, dim: str) -> xr.DataArray:
     if n < 2:
         return da
     a = np.moveaxis(arr, axis, 0)
+    shape = (n,) + (1,) * (a.ndim - 1)
     valid = np.isfinite(a)
-    idx = np.where(valid, np.arange(n).reshape((n,) + (1,) * (a.ndim - 1)), 0)
-    # forward fill
-    fwd = np.maximum.accumulate(idx, axis=0)
-    a = np.take_along_axis(a, fwd, axis=0)
-    # backward fill for any leading NaNs
-    idx_b = np.where(valid, np.arange(n).reshape((n,) + (1,) * (a.ndim - 1)), n - 1)
-    bwd = np.minimum.accumulate(idx_b[::-1], axis=0)[::-1]
-    filled = np.take_along_axis(a, bwd, axis=0)
-    a = np.where(np.isfinite(a), a, filled)
-    out = da.copy(data=np.moveaxis(a, 0, axis))
-    return out
+
+    if direction == "both":
+        idx = np.where(valid, np.arange(n).reshape(shape), 0)
+        fwd = np.maximum.accumulate(idx, axis=0)
+        a = np.take_along_axis(a, fwd, axis=0)
+        idx_b = np.where(valid, np.arange(n).reshape(shape), n - 1)
+        bwd = np.minimum.accumulate(idx_b[::-1], axis=0)[::-1]
+        a = np.where(np.isfinite(a), a, np.take_along_axis(a, bwd, axis=0))
+    else:
+        # n is a sentinel meaning "no valid value anywhere below" -> stay NaN
+        idx_b = np.where(valid, np.arange(n).reshape(shape), n)
+        bwd = np.minimum.accumulate(idx_b[::-1], axis=0)[::-1]
+        picked = np.take_along_axis(a, np.clip(bwd, 0, n - 1), axis=0)
+        a = np.where(valid, a, np.where(bwd < n, picked, np.nan))
+
+    return da.copy(data=np.moveaxis(a, 0, axis))
 
 
 def kelvin_to_celsius(da: xr.DataArray) -> xr.DataArray:
@@ -183,8 +198,12 @@ def interp_to_depths(da: xr.DataArray, cfg: dict | None = None) -> xr.DataArray:
     if src.size == depths.size and np.allclose(src, depths, atol=1e-3):
         return da.assign_coords(depth=depths)
     out = da.interp(depth=depths, method="linear", kwargs={"fill_value": None})
-    # hold the end members instead of producing NaN outside the source range
-    out = _fill_edges(out, "depth")
+    # Fill UPWARD only: our shallowest level (0 m) sits just above the shallowest
+    # GLORYS level (0.5 m), and borrowing that value is fine. Filling DOWNWARD
+    # would copy the deepest real value below the seafloor and fabricate deep
+    # temperatures over shelf cells -- those must stay NaN so the sample is
+    # dropped rather than trained on.
+    out = _fill_edges(out, "depth", direction="backward")
     return out.assign_coords(depth=depths)
 
 
