@@ -17,7 +17,7 @@ surface_vars: [sst, sss, sla, ucur, vcur, uwind, vwind]
 
 patch:
   size: 9                   # N x N spatial patch around each cell
-  add_coords: true          # append lat, lon, sin(doy), cos(doy) channels
+  add_coords: false          # append lat, lon, sin(doy), cos(doy) channels
 
 model:
   encoder: cnn              # cnn | vit
@@ -31,10 +31,10 @@ model:
     heads: 4
 
 train:
-  epochs: 120
+  epochs: 40
   batch_size: 256
   lr: 8.0e-4
-  weight_decay: 1.0e-4
+  weight_decay: 1.0e-2
   val_fraction: 0.15
   seed: 42
   # per-depth loss weights: up-weight the thermocline (50-300 m) where the

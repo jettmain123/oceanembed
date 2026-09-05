@@ -38,6 +38,11 @@ def main() -> None:
     ap.add_argument("--trees", type=int, default=120)
     ap.add_argument("--max-depth", type=int, default=16)
     ap.add_argument("--max-train", type=int, default=20000, help="subsample train rows for speed")
+    ap.add_argument("--features", choices=["all", "position", "surface"], default="all",
+                    help="all = every centre feature (the standard baseline); "
+                         "position = lat/lon/day ONLY, no ocean data at all -- this is the "
+                         "CLIMATOLOGY control, i.e. how well you do by memorising the map; "
+                         "surface = the 7 satellite fields with no position")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -51,6 +56,19 @@ def main() -> None:
     arX, arY = centre_features(d["arX"]), d["arY"]
     depths = d["depths"]
     names = channel_names(cfg)
+
+    # Feature subsets. The 'position' control is the important one: if predicting
+    # from lat/lon/day alone scores nearly as well as using the satellite fields,
+    # then the task is being solved by spatial climatology and the headline
+    # numbers say little about surface-to-subsurface inference.
+    if args.features == "position":
+        cols = [names.index(n) for n in ("lat_n", "lon_n", "sin_doy", "cos_doy") if n in names]
+    elif args.features == "surface":
+        cols = [names.index(n) for n in cfg["surface_vars"]]
+    else:
+        cols = list(range(len(names)))
+    trX, arX = trX[:, cols], arX[:, cols]
+    names = [names[i] for i in cols]
 
     rng = np.random.default_rng(cfg["train"]["seed"])
     if args.max_train and len(trX) > args.max_train:
@@ -83,8 +101,10 @@ def main() -> None:
         importances = np.abs(rg.coef_).astype(np.float32)
     dt = time.time() - t0
 
-    card = scorecard(arY, pred, depths, label=f"baseline_{args.model}_centre_only")
+    card = scorecard(arY, pred, depths, label=f"baseline_{args.model}_{args.features}")
     out = resolve(cfg["paths"]["baseline_scorecard"])
+    if args.features != "all":
+        out = out.with_name(f"baseline_{args.features}_scorecard.json")
     card["seconds"] = round(dt, 1)
     card["n_train"] = int(trX.shape[0])
     card["features"] = names
