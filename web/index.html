@@ -135,6 +135,26 @@
   </div>
 </div>
 
+<div class="card" style="margin-top:20px">
+  <h2>The thermocline in 3D &mdash; depth of the 26&deg;C isotherm</h2>
+  <div class="note" style="margin-top:0;margin-bottom:10px">
+    This surface is the <b>base of the warm layer</b>: how deep you go before the ocean
+    drops below 26&nbsp;&deg;C. Height is that depth, so <b>peaks are where the warm layer
+    runs deep</b> &mdash; the water that keeps a cyclone fed. Colour is cyclone heat
+    potential. Drag to orbit, scroll to zoom.
+    <br>This is the dimension a flat map throws away: the model predicts 15 depths, and the
+    shape of this surface is what it is really estimating.
+  </div>
+  <div id="deck" style="height:430px;border-radius:8px;background:#060a12;position:relative"></div>
+  <div class="bar-row"><span id="d3lo"></span><div class="bar" id="d3bar"></div><span id="d3hi"></span></div>
+  <div class="ctl">
+    <label for="zexag">Vertical</label>
+    <input type="range" id="zexag" min="1" max="40" value="14">
+    <span class="val" id="zexagv">14x</span>
+    <span class="note" style="margin:0" id="d3date"></span>
+  </div>
+</div>
+
 <div class="row" style="margin-top:20px">
   <div class="card">
     <h2>Coastal segments near elevated risk &mdash; proof of concept</h2>
@@ -177,6 +197,7 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.6.0/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.36/dist.min.js"></script>
 <script>
 // ---- colour ramps ----------------------------------------------------------
 const VIRIDIS=[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],
@@ -250,6 +271,9 @@ async function loadIndex(){
   buildStats(); buildPerDepth(); buildClim();
   await loadDay(n-1);           // sets dayIdx, which buildAlerts needs
   buildAlerts();
+  // the 3D surface is independent of MapLibre, so build it here rather than
+  // waiting on the map's load event
+  buildDeck();
   initMap();
 }
 
@@ -510,6 +534,53 @@ function drawProfile(){
   $("profmeta").innerHTML=`Whole-profile RMSE against GLORYS: <b>${rmse.toFixed(2)} °C</b>`;
 }
 
+// ---- the thermocline surface ------------------------------------------------
+// D26 as topography, coloured by TCHP. One point per ocean cell reads as a
+// surface at this density, and avoids rebuilding a mesh whenever the date or the
+// exaggeration changes.
+let deckgl=null;
+function buildDeck(){
+  if(typeof deck==="undefined"||!PROD) return;
+  const [nz,ny,nx]=IX.shape, ex=+$("zexag").value;
+  const pts=[];
+  let tlo=Infinity, thi=-Infinity;
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    const t=pval(0,0,y,x);
+    if(isFinite(t)){ if(t<tlo)tlo=t; if(t>thi)thi=t; }
+  }
+  if(!isFinite(tlo)){ tlo=0; thi=1; }
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    const d=pval(0,1,y,x), t=pval(0,0,y,x);
+    if(!isFinite(d)||!isFinite(t)) continue;
+    const c=ramp((t-tlo)/(thi-tlo||1), VIRIDIS);
+    // domain is 60 deg wide by 25 tall; scale so the basin fits the canvas and
+    // the vertical stays readable against it
+    pts.push({p:[(lonOf(x)-75)*4,(latOf(y)-17.5)*4,d*ex*0.018],
+              c:[c[0]|0,c[1]|0,c[2]|0]});
+  }
+  const layer=new deck.PointCloudLayer({
+    id:"thermocline", data:pts,
+    coordinateSystem:deck.COORDINATE_SYSTEM.CARTESIAN,
+    getPosition:d=>d.p, getColor:d=>d.c, pointSize:4.6,
+  });
+  if(!deckgl){
+    deckgl=new deck.Deck({
+      parent:$("deck"),
+      views:new deck.OrbitView({orbitAxis:"Z", fovy:50}),
+      initialViewState:{target:[0,0,22], rotationX:38, rotationOrbit:-22,
+                        zoom:1.55, minZoom:-1, maxZoom:6},
+      controller:true, layers:[layer],
+      parameters:{clearColor:[6/255,10/255,18/255,1]},
+    });
+  } else {
+    deckgl.setProps({layers:[layer]});
+  }
+  $("d3lo").textContent=tlo.toFixed(0)+" kJ/cm2";
+  $("d3hi").textContent=thi.toFixed(0)+" kJ/cm2";
+  $("d3bar").style.background=cssRamp(VIRIDIS);
+  $("d3date").textContent=IX.dates[dayIdx]+" -- "+pts.length.toLocaleString()+" ocean cells";
+}
+
 // ---- panels ----------------------------------------------------------------
 function buildStats(){
   const m=IX.metrics, imp=m.baseline_rmse?100*(m.baseline_rmse-m.mean_rmse)/m.baseline_rmse:null;
@@ -565,12 +636,12 @@ $("opac").oninput=e=>{
 $("date").oninput=async e=>{
   await loadDay(+e.target.value);
   $("datesel").value=IX.dates[dayIdx];
-  refresh(); buildAlerts();
+  refresh(); buildAlerts(); buildDeck();
 };
 $("datesel").onchange=async e=>{
   const i=IX.dates.indexOf(e.target.value);
   if(i<0){ e.target.value=IX.dates[dayIdx]; return; }
-  $("date").value=i; await loadDay(i); refresh(); buildAlerts();
+  $("date").value=i; await loadDay(i); refresh(); buildAlerts(); buildDeck();
 };
 $("basemap").onchange=e=>{
   const b=BASEMAPS[e.target.value];
@@ -604,6 +675,7 @@ for(const b of document.querySelectorAll("#modes button")) b.onclick=()=>{
   document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));
   b.classList.add("on"); mode=+b.dataset.m; refresh();
 };
+$("zexag").oninput=e=>{ $("zexagv").textContent=e.target.value+"x"; buildDeck(); };
 loadIndex();
 </script>
 </body>
