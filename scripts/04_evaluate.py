@@ -23,7 +23,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from oceanembed import ensure_dirs, load_config, resolve
-from oceanembed.evaluate import compare_table, format_table, load_card, scorecard
+from oceanembed.evaluate import (climatology_skill, compare_table, format_climatology,
+                                 format_table, load_card, scorecard, spatial_climatology)
 from oceanembed.inference import Predictor
 
 
@@ -130,6 +131,7 @@ def main() -> None:
     d = np.load(dpath, allow_pickle=True)
     arX, arY, arM = d["arX"], d["arY"], d["arM"]
     depths = d["depths"]
+    trY, trM = d["trY"], d["trM"]
 
     pred_ = Predictor.load(cfg, prefer=None if args.backend == "auto" else args.backend)
     print(pred_, "\ncheckpoint:", pred_.meta.get("path"))
@@ -150,6 +152,25 @@ def main() -> None:
 
     print(f"\nevaluated on {arX.shape[0]} holdout profiles")
     print(format_table(card))
+
+    # Skill ABOVE climatology -- the metric that actually matters. Predicting the
+    # per-location average profile needs no satellite data at all, and over a
+    # short record it explains most of the variance. Beating the RF baseline is
+    # not impressive if neither model beats "the usual temperature here".
+    y_clim = spatial_climatology(trY, trM, arM)
+    clim = climatology_skill(arY, y_pred, y_clim, depths)
+    card["vs_climatology"] = clim
+    print("\nSkill above CLIMATOLOGY (per-location mean profile from train days):")
+    print(format_climatology(clim))
+    ms = clim["mean_skill_vs_clim"]
+    if ms <= 0:
+        print("\n  The model is NOT beating climatology. Surface data is adding nothing")
+        print("  overall -- more temporal coverage is the fix, not more tuning.")
+    elif ms < 0.2:
+        print(f"\n  Only {ms:.1%} better than climatology -- most apparent skill is the")
+        print("  spatial map, not surface inference. More months of data is the fix.")
+    else:
+        print(f"\n  {ms:.1%} better than climatology -- genuine surface-to-depth skill.")
 
     base = load_card(resolve(cfg["paths"]["baseline_scorecard"]))
     if base:

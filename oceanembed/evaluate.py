@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["per_depth_metrics", "scorecard", "format_table", "compare_table", "load_card"]
+__all__ = ["per_depth_metrics", "scorecard", "format_table", "compare_table", "load_card",
+           "spatial_climatology", "climatology_skill", "format_climatology"]
 
 
 def per_depth_metrics(y_true: np.ndarray, y_pred: np.ndarray, depths) -> list[dict]:
@@ -127,3 +128,73 @@ def load_card(path) -> dict | None:
     if not p.exists():
         return None
     return json.loads(p.read_text(encoding="utf-8"))
+
+
+def spatial_climatology(trY, trM, arM, decimals: int = 2):
+    """Per-location mean profile from the TRAIN days -- the climatology forecast.
+
+    This is the honest thing to beat. "What is the average temperature profile at
+    this exact spot?" needs no satellite data at all, and over a short record it
+    explains most of the variance, especially in the deep ocean where little
+    changes from week to week. Any skill we claim should be skill ON TOP of this.
+
+    trY (N,15) train targets, trM/arM (N,3) meta [time_idx, lat, lon].
+    Returns (M,15) climatology prediction for the holdout rows.
+    """
+    trY = np.asarray(trY)
+    key_tr = np.round(np.asarray(trM)[:, 1:3], decimals)
+    key_ar = np.round(np.asarray(arM)[:, 1:3], decimals)
+
+    # group train profiles by location
+    uniq, inv = np.unique(key_tr, axis=0, return_inverse=True)
+    sums = np.zeros((uniq.shape[0], trY.shape[1]), dtype=np.float64)
+    cnts = np.zeros(uniq.shape[0], dtype=np.int64)
+    np.add.at(sums, inv, trY)
+    np.add.at(cnts, inv, 1)
+    means = sums / np.maximum(cnts, 1)[:, None]
+    global_mean = trY.mean(axis=0)
+
+    # look each holdout location up
+    lut = {tuple(k): i for i, k in enumerate(map(tuple, uniq))}
+    out = np.empty((key_ar.shape[0], trY.shape[1]), dtype=np.float32)
+    for j, k in enumerate(map(tuple, key_ar)):
+        i = lut.get(k)
+        out[j] = means[i] if i is not None else global_mean
+    return out
+
+
+def climatology_skill(y_true, y_pred, y_clim, depths) -> dict:
+    """Per-depth skill relative to the climatology forecast.
+
+    skill = 1 - MSE(model) / MSE(climatology)
+      1.0  perfect
+      0.0  no better than knowing the location and nothing else
+      < 0  WORSE than climatology -- the surface data is not being used usefully
+    """
+    y_true, y_pred, y_clim = (np.asarray(a, dtype=np.float64) for a in (y_true, y_pred, y_clim))
+    rows = []
+    for k, z in enumerate(np.asarray(depths)):
+        m = np.isfinite(y_true[:, k]) & np.isfinite(y_pred[:, k]) & np.isfinite(y_clim[:, k])
+        mse_m = float(np.mean((y_pred[m, k] - y_true[m, k]) ** 2))
+        mse_c = float(np.mean((y_clim[m, k] - y_true[m, k]) ** 2))
+        rows.append({
+            "depth_m": float(z),
+            "rmse_model": float(np.sqrt(mse_m)),
+            "rmse_clim": float(np.sqrt(mse_c)),
+            "skill_vs_clim": float(1.0 - mse_m / mse_c) if mse_c > 1e-12 else float("nan"),
+        })
+    valid = [r["skill_vs_clim"] for r in rows if np.isfinite(r["skill_vs_clim"])]
+    return {"per_depth": rows, "mean_skill_vs_clim": float(np.mean(valid)) if valid else float("nan"),
+            "mean_rmse_clim": float(np.mean([r["rmse_clim"] for r in rows]))}
+
+
+def format_climatology(card: dict) -> str:
+    lines = [f"{'depth (m)':>10} {'RMSE model':>11} {'RMSE clim':>10} {'skill vs clim':>14}",
+             "-" * 50]
+    for r in card["per_depth"]:
+        lines.append(f"{r['depth_m']:10.0f} {r['rmse_model']:11.3f} {r['rmse_clim']:10.3f} "
+                     f"{r['skill_vs_clim']:14.3f}")
+    lines.append("-" * 50)
+    lines.append(f"{'MEAN':>10} {'':>11} {card['mean_rmse_clim']:10.3f} "
+                 f"{card['mean_skill_vs_clim']:14.3f}")
+    return "\n".join(lines)
