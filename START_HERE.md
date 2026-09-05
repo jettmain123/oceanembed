@@ -72,6 +72,59 @@ the practice data, and simply re-run their commands later when the real data
 arrives. Nothing in their work changes, because the real data has exactly the
 same shape as the practice data.
 
+## Moving data between laptops
+
+Only two transfers happen, and only raw files ever need to move once.
+
+```
+L2 (PODAAC: currents + winds)
+      |  transfer 1: raw .nc folders, ONCE
+      v
+L1 (Copernicus: SST, SSS, SLA, GLORYS)
+      |  runs 01_harmonize_real.py  ->  harmonized.nc
+      |  transfer 2: harmonized.nc only
+      v
+L3 (the 4080)  builds dataset.npz locally and trains
+```
+
+**Never transfer `dataset.npz`.** It is the biggest file in the project and L3
+rebuilds it from `harmonized.nc` in under a minute.
+
+Sizes, per 100 days of data:
+
+| moving | what | size per 100 days |
+|---|---|---|
+| L2 -> L1 | raw OSCAR + CCMP | ~180 MB |
+| L1 -> L3 | harmonized.nc | ~75 MB |
+| never | dataset.npz | ~700 MB |
+
+How to move it: Google Drive or OneDrive for anything under a few GB. On the
+same wifi it is faster to run `python -m http.server 8000` in the folder on the
+sending laptop and download from `http://<their-ip>:8000` on the other. A USB
+stick beats both for multi-GB transfers.
+
+`harmonized.nc` fits in GitHub (100 MB limit) up to roughly 130 days of data.
+Past that, use Drive.
+
+### Download scattered months, not consecutive days
+
+Two full years of daily files is ~3.7 GB downloaded and ~550 MB of
+`harmonized.nc` to move around. You do not need it.
+
+Consecutive days are nearly identical -- 15 October and 16 October tell the model
+almost the same thing. What breaks the climatology shortcut is SPANNING SEASONS,
+not filling in every day.
+
+So pull **6-8 separate months spread across two years** (e.g. Jan, Mar, May,
+Jul, Sep, Nov). Each one is a single command exactly like the October pull you
+already did. That gives roughly 240 days covering every season, for about a
+third of the download, transfer and training cost of 730 consecutive days.
+
+Note for whoever trains: with scattered months the chronological split holds out
+the LAST month, so the test becomes "does it work on a season it never saw".
+That is a harder and more honest test than holding out five days in the middle
+of a month -- expect lower numbers, and say why.
+
 ## The one file that gets shared
 
 When Person 1 finishes, they send ONE file to Person 2 and Person 3:
