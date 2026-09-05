@@ -197,3 +197,58 @@ Full calendar years, not more of the same months. The single biggest remaining
 gap is that the model has never seen a November or December. Once training spans
 complete years, the seasonal-extrapolation problem above disappears and the
 day-of-year channels should start helping rather than hurting.
+
+
+---
+
+# THE HEADLINE: validated against real ARGO floats
+
+Everything above is measured against GLORYS, which is a computer model. This is
+measured against **real instruments in real water** -- 20,000 profiles from
+gridded ARGO, restricted with `--holdout-only` to dates the model never trained
+on.
+
+| | RMSE vs ARGO | bias |
+|---|---|---|
+| **OceanEmbed** | **1.55 degC** | +0.93 |
+| **GLORYS itself** | **1.50 degC** | +0.80 |
+
+**We are 0.05 degC -- about 3% -- from GLORYS when both are judged against real
+floats.**
+
+That is the claim worth making. Our raw error against ARGO looks poor next to the
+0.91 degC we score against GLORYS, but almost none of it is ours: GLORYS
+disagrees with ARGO by 1.50 degC on its own, and we inherit that. We reproduce a
+supercomputer reanalysis to within 3% of its own accuracy, in milliseconds, from
+satellite data alone.
+
+> "Our reconstruction is within 3% of GLORYS's own agreement with ARGO floats --
+> we match a supercomputer reanalysis using only satellite inputs, in
+> milliseconds."
+
+## The caveats to state before anyone asks
+
+- Both we and GLORYS run about **+0.8 to +0.9 degC warm** against this ARGO
+  product. That bias is GLORYS's, and we have faithfully learned it. We cannot
+  be better than what we were trained on.
+- The INCOIS gridded ARGO is itself an **objective analysis**, not raw floats, so
+  part of that 1.5 degC is the gridding rather than either model being wrong.
+- **GLORYS assimilates ARGO.** So this is not a fully independent test of the
+  physics -- it is an honest end-to-end test of the surrogate. Say so first
+  rather than being asked.
+
+## Reproducing
+
+```
+python scripts/02b_argo_colocate.py --dry-run        # shows which dates are clean
+python scripts/02b_argo_colocate.py --holdout-only   # splice in only those
+python scripts/04_evaluate.py
+```
+
+`--holdout-only` matters. Of 108 ARGO dates in the 2022 record, only 6 fall on
+holdout days; the rest land on days the model trained on. Their measurements
+would still be independent, but the surface patches would not be, and the score
+would flatter us.
+
+After this, `dataset.npz` holds the ARGO holdout, so `04_evaluate` reports ARGO
+numbers. Re-run `02_build_dataset.py` to get the GLORYS holdout back.
