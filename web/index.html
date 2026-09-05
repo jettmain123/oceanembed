@@ -74,6 +74,8 @@
       <button data-l="0">Cyclone heat (TCHP)</button>
       <button data-l="1">26&deg;C isotherm</button>
       <button data-l="2">Mixed layer</button>
+      <button data-l="3">Uncertainty</button>
+      <button data-l="4">RI risk</button>
     </div>
     <div class="tabs" id="modes" style="margin-top:7px">
       <button data-m="0" class="on">Predicted</button>
@@ -126,6 +128,19 @@
 
 <div class="row" style="margin-top:20px">
   <div class="card">
+    <h2>Coastal segments near elevated risk &mdash; proof of concept</h2>
+    <div class="warnbox" style="margin-top:0;margin-bottom:12px">
+      <b>Decision support only.</b> This shows where the <b>ocean</b> could sustain rapid
+      intensification. It does <b>not</b> detect or forecast cyclones, knows nothing about
+      atmospheric conditions, and is <b>not an evacuation advisory</b>. These entries are
+      demonstration objects &mdash; nothing is transmitted and nothing is connected to any
+      alerting system.
+    </div>
+    <table id="alerts"></table>
+    <div class="note" id="alertnote"></div>
+  </div>
+
+  <div class="card">
     <h2>Accuracy on held-out days</h2>
     <div class="stats" id="stats"></div>
     <table id="perdepth" style="margin-top:13px"></table>
@@ -157,6 +172,8 @@
 // ---- colour ramps ----------------------------------------------------------
 const VIRIDIS=[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],
   [31,158,137],[53,183,121],[109,205,89],[180,222,44],[253,231,37]];
+const HEATU=[[13,21,34],[40,60,90],[80,110,140],[150,160,120],[230,180,70],[255,120,60]];
+const RISKC=[[30,48,74],[70,110,150],[230,180,70],[255,90,70]];   // LOW WATCH ELEVATED HIGH
 const DIVERGE=[[33,102,172],[103,169,207],[209,229,240],[247,247,247],
   [253,219,199],[239,138,98],[178,24,43]];
 function ramp(t,tbl){
@@ -222,7 +239,8 @@ async function loadIndex(){
   $("region").innerHTML=REGIONS.map((r,i)=>`<option value="${i}">${r[0]}</option>`).join("");
   cv.width=IX.shape[2]; cv.height=IX.shape[1];
   buildStats(); buildPerDepth(); buildClim();
-  await loadDay(n-1);
+  await loadDay(n-1);           // sets dayIdx, which buildAlerts needs
+  buildAlerts();
   initMap();
 }
 
@@ -255,15 +273,22 @@ function renderCanvas(){
     // canvas row 0 must be the NORTH edge; lat index 0 is the south
     const v=buf[y*nx+x], o=((ny-1-y)*nx+x)*4;
     if(!isFinite(v)){ img.data[o+3]=0; continue; }   // transparent: basemap shows through
-    const c=ramp((v-lo)/(hi-lo||1), mode===2?DIVERGE:VIRIDIS);
+    let c;
+    if(mode!==2 && layer==="4") c=RISKC[Math.max(0,Math.min(3,Math.round(v)))];
+    else if(mode!==2 && layer==="3") c=ramp((v-lo)/(hi-lo||1), HEATU);
+    else c=ramp((v-lo)/(hi-lo||1), mode===2?DIVERGE:VIRIDIS);
     img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;
   }
   ctx.putImageData(img,0,0);
   lastLo=lo; lastHi=hi;
-  const u=(isT?" °C":" "+IX.products.units[k])+(mode===2?" diff":"");
-  $("lo").textContent=lo.toFixed(1)+u;
-  $("hi").textContent=hi.toFixed(1)+u;
-  $("cbar").style.background=cssRamp(mode===2?DIVERGE:VIRIDIS);
+  let u=(isT?" °C":" "+IX.products.units[k])+(mode===2?" diff":"");
+  if(!isT&&k===4&&mode!==2){ u=""; $("lo").textContent="LOW"; $("hi").textContent="HIGH"; }
+  if(!(!isT&&k===4&&mode!==2)){
+    $("lo").textContent=lo.toFixed(1)+u;
+    $("hi").textContent=hi.toFixed(1)+u;
+  }
+  $("cbar").style.background=cssRamp(
+      mode===2?DIVERGE: layer==="4"?RISKC : layer==="3"?HEATU : VIRIDIS);
   $("depthv").textContent=IX.depths[z].toFixed(0)+" m";
   $("datev").textContent=IX.dates[dayIdx];
   return cv.toDataURL();
@@ -368,16 +393,35 @@ function readout(){
                         `${what} &nbsp;·&nbsp; ${IX.dates[dayIdx]}`;
   const d=P0-R0, tol=isT?0.5:(k===0?10:15);
   let extra="";
+  if(!isT&&k===4&&isFinite(P0)){
+    const L=["LOW","WATCH","ELEVATED","HIGH"][Math.max(0,Math.min(3,Math.round(P0)))];
+    $("tval").innerHTML=`<span style="font-size:30px">${L}</span>`;
+    extra="rule: TCHP over 50 kJ/cm², anomalously high here, and the model confident";
+  }
+  if(!isT&&k===3&&isFinite(P0)){
+    extra = P0<=0.5 ? '<span style="color:#5fd39b">confident here</span>'
+                    : '<span style="color:#ffb454">less certain here -- treat with caution</span>';
+  }
   if(!isT&&k===0&&isFinite(P0)){
     // 50 kJ/cm2 is the rule-of-thumb rapid-intensification threshold
     extra=P0>=50?`<span style="color:#ff7b72"><b>above the 50 kJ/cm² cyclone threshold</b></span>`
                 :`<span style="color:#5fd39b">below the 50 kJ/cm² threshold</span>`;
   }
-  $("tcmp").innerHTML=
-    `<span>reference <b>${isFinite(R0)?R0.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
-    `<span>difference <b class="${Math.abs(d)<tol?'pos':'neg'}">`+
-    `${isFinite(d)?(d>=0?"+":"")+d.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
-    (extra?`<span>${extra}</span>`:"");
+  if(!isT&&k===4){
+    // the second slot of the risk layer holds the TCHP anomaly, not a reference
+    $("tcmp").innerHTML=
+      `<span>TCHP vs local norm <b class="${R0>=8?'neg':'pos'}">`+
+      `${isFinite(R0)?(R0>=0?"+":"")+R0.toFixed(1)+" kJ/cm²":"--"}</b></span>`+
+      (extra?`<span>${extra}</span>`:"");
+  } else if(!isT&&k===3){
+    $("tcmp").innerHTML = extra?`<span>${extra}</span>`:"";
+  } else {
+    $("tcmp").innerHTML=
+      `<span>reference <b>${isFinite(R0)?R0.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
+      `<span>difference <b class="${Math.abs(d)<tol?'pos':'neg'}">`+
+      `${isFinite(d)?(d>=0?"+":"")+d.toFixed(isT?2:1)+" "+unit:"--"}</b></span>`+
+      (extra?`<span>${extra}</span>`:"");
+  }
 }
 
 // ---- profile ---------------------------------------------------------------
@@ -455,6 +499,25 @@ function buildClim(){
   $("clim").innerHTML=s;
 }
 
+function buildAlerts(){
+  const all=IX.alerts||{};
+  const day=IX.dates[Math.max(0,dayIdx)]||IX.dates[IX.dates.length-1];
+  const rows=(all[day]||[]).slice(0,10);
+  let s='<tr><th>coastal segment</th><th>region</th><th>level</th>'+
+        '<th>peak TCHP</th><th>nearest</th><th>spread</th></tr>';
+  if(!rows.length) s+='<tr><td colspan="6" style="color:#8fa3bf">'+
+        'No segments met the rule on this date.</td></tr>';
+  for(const a of rows)
+    s+=`<tr><td>${a.segment}</td><td style="text-align:left">${a.region}</td>`+
+       `<td class="${a.level==="HIGH"?"neg":""}">${a.level}</td>`+
+       `<td>${a.peak_tchp_kj_cm2}</td><td>${a.nearest_flagged_km} km</td>`+
+       `<td>${a.model_spread_degC ?? "-"}</td></tr>`;
+  $("alerts").innerHTML=s;
+  const n=(all[day]||[]).length;
+  $("alertnote").textContent=`${day} — ${n} segment${n===1?"":"s"} met the rule`+
+    (n>10?" (showing 10)":"")+". Change the date to step through the record.";
+}
+
 // ---- events ----------------------------------------------------------------
 $("depth").oninput=refresh;
 $("opac").oninput=e=>{
@@ -464,12 +527,12 @@ $("opac").oninput=e=>{
 $("date").oninput=async e=>{
   await loadDay(+e.target.value);
   $("datesel").value=IX.dates[dayIdx];
-  refresh();
+  refresh(); buildAlerts();
 };
 $("datesel").onchange=async e=>{
   const i=IX.dates.indexOf(e.target.value);
   if(i<0){ e.target.value=IX.dates[dayIdx]; return; }
-  $("date").value=i; await loadDay(i); refresh();
+  $("date").value=i; await loadDay(i); refresh(); buildAlerts();
 };
 $("basemap").onchange=e=>{
   const b=BASEMAPS[e.target.value];
@@ -486,6 +549,17 @@ for(const b of document.querySelectorAll("#layers button")) b.onclick=()=>{
   const off=(layer!=="T");
   $("depth").disabled=off;
   $("depth").parentElement.style.opacity=off?.4:1;
+  // there is no GLORYS reference for uncertainty or risk -- they are ours alone
+  const predOnly=(layer==="3"||layer==="4");
+  document.querySelectorAll("#modes button").forEach((x,i)=>{
+    x.disabled=predOnly&&i>0;
+    x.style.opacity=(predOnly&&i>0)?.35:1;
+  });
+  if(predOnly){
+    document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));
+    document.querySelector('#modes button[data-m="0"]').classList.add("on");
+    mode=0;
+  }
   refresh();
 };
 for(const b of document.querySelectorAll("#modes button")) b.onclick=()=>{

@@ -33,6 +33,7 @@ from oceanembed import ensure_dirs, load_config, resolve
 from oceanembed.evaluate import load_card
 from oceanembed.inference import Predictor
 from oceanembed.products import d26, mld, tchp
+from oceanembed.risk import DISCLAIMER, build_alerts, risk_index
 
 T_MIN, T_MAX = -2.0, 40.0          # covers every ocean temperature we will meet
 SCALE = (T_MAX - T_MIN) / 65533.0
@@ -51,6 +52,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data")
     ap.add_argument("--max-days", type=int, default=None)
+    ap.add_argument("--mc", type=int, default=10,
+                    help="Monte-Carlo passes for the uncertainty layer")
     ap.add_argument("--index-only", action="store_true",
                     help="rewrite index.json only; the day files are unchanged")
     args = ap.parse_args()
@@ -85,6 +88,8 @@ def main() -> None:
 
     print(f"exporting {n_days} days, {ny} x {nx} cells, {nz} depths -> {out_dir}")
     dates = []
+    risk_days = []      # TCHP per day, to build the climatology the risk rule needs
+    pending = []        # (path, prod array) -- risk is filled in after the climatology
     for it in range(n_days):
         if args.index_only:
             dates.append(str(np.datetime64(times[it], "D")))
@@ -107,13 +112,13 @@ def main() -> None:
                 extra[:, 2] = np.sin(2 * np.pi * d.timetuple().tm_yday / 365.25)
                 extra[:, 3] = np.cos(2 * np.pi * d.timetuple().tm_yday / 365.25)
                 patches = np.concatenate([patches, extra], axis=1)
-            y = pred_.predict(patches)                                     # (n,nz)
+            y, mc_std = pred_.predict_mc(patches, n=args.mc)                # (n,nz) each
             pred[:, iy + half, ix + half] = y.T
 
         # Operational products, computed per cell from the SAME profiles. This is
         # what a forecaster acts on -- TCHP above ~50 kJ/cm2 is the cyclone
         # rapid-intensification threshold.
-        prod = np.full((2, 3, ny, nx), np.nan, np.float32)
+        prod = np.full((2, 5, ny, nx), np.nan, np.float32)
         for w, field in ((0, pred), (1, ref)):
             flat = field.reshape(nz, -1).T                                  # (ny*nx, nz)
             good = np.isfinite(flat).all(axis=1)
@@ -122,12 +127,32 @@ def main() -> None:
                 prod[w, 0].reshape(-1)[good] = tchp(g, depths)
                 prod[w, 1].reshape(-1)[good] = d26(g, depths)
                 prod[w, 2].reshape(-1)[good] = mld(g, depths)
+        # uncertainty and rule-based risk, for the prediction only -- the
+        # reference has neither, so those slots stay NaN
+        if iy.size:
+            k100 = int(np.argmin(np.abs(depths - 100)))
+            prod[0, 3][iy + half, ix + half] = mc_std[:, k100]
+        risk_days.append(prod[0, 0].copy())
 
         stack = np.stack([encode(pred), encode(ref)])                      # (2,nz,ny,nx)
-        (out_dir / f"day_{it:03d}.bin").write_bytes(stack.tobytes() + prod.tobytes())
+        pending.append((out_dir / f"day_{it:03d}.bin", stack, prod))
         dates.append(str(np.datetime64(times[it], "D")))
         if (it + 1) % 10 == 0 or it == n_days - 1:
             print(f"  {it + 1}/{n_days} days")
+
+    # Second pass: the risk rule needs to know what is NORMAL at each location,
+    # because an absolute TCHP threshold flags nearly the whole basin every day.
+    alerts_by_day = {}
+    if not args.index_only and risk_days:
+        clim = np.nanmean(np.stack(risk_days), axis=0)
+        for (path, stack, prod), date in zip(pending, dates):
+            R = risk_index(prod[0, 0], prod[0, 3], tchp_anomaly=prod[0, 0] - clim)
+            prod[0, 4] = R.astype(np.float32)
+            prod[1, 4] = (prod[0, 0] - clim).astype(np.float32)   # the anomaly itself
+            path.write_bytes(stack.tobytes() + prod.tobytes())
+            a = build_alerts(date, R, prod[0, 0], prod[0, 3], lat, lon)
+            if a:
+                alerts_by_day[date] = a
 
     card = load_card(resolve(cfg["paths"]["scorecard"])) or {}
     base = load_card(resolve(cfg["paths"]["baseline_scorecard"])) or {}
@@ -139,13 +164,17 @@ def main() -> None:
         "lon": [float(lon[0]), float(lon[-1])],
         "encoding": {"t_min": T_MIN, "scale": SCALE, "missing": 0},
         "products": {
-            "names": ["TCHP", "D26", "MLD"],
-            "units": ["kJ/cm2", "m", "m"],
-            "labels": ["Cyclone heat potential", "26 degC isotherm depth", "Mixed layer depth"],
+            "names": ["TCHP", "D26", "MLD", "UNC", "RISK"],
+            "units": ["kJ/cm2", "m", "m", "degC", "level"],
+            "labels": ["Cyclone heat potential", "26 degC isotherm depth",
+                       "Mixed layer depth", "Model uncertainty at 100 m",
+                       "RI risk level"],
             "byte_offset": int(2 * nz * ny * nx * 2),   # after the uint16 temperature block
             "dtype": "float32",
-            "shape": [2, 3, int(ny), int(nx)],
+            "shape": [2, 5, int(ny), int(nx)],
         },
+        "alerts": alerts_by_day,
+        "disclaimer": DISCLAIMER,
         "metrics": {
             "mean_corr": card.get("mean_corr"),
             "mean_rmse": card.get("mean_rmse"),
