@@ -2,11 +2,18 @@
 
 Read this first, then open the file for your job.
 
-- Person 1 -> `PERSON1_DATA.md` (Copernicus downloads: SST, SSS, SLA, GLORYS)
-- Person 2 -> `PERSON2_MODEL.md` (model training and experiments)
-- Person 3 -> `PERSON3_RESULTS.md` (results, slides, report)
-- Person 4 -> `WEBSITE.md` (the frontend, and the PODAAC downloads first)
+### Current phase: collecting a full seasonal cycle
 
+- Laptop 1 -> `LAPTOP1_COLLECT.md`  (Dec 2023, Feb 2024)
+- Laptop 2 -> `LAPTOP2_COLLECT.md`  (Apr 2024, Jun 2024)
+- Laptop 3 -> `LAPTOP3_COLLECT.md`  (Aug 2024, Sep 2024)
+- Laptop 4 -> `LAPTOP4_TRAIN.md`    (merges, trains, reports -- the RTX 4080)
+
+Each collecting laptop downloads WHOLE MONTHS of all seven products, harmonizes
+them itself, and uploads ONE file (~23 MB per month) to the shared Google Drive
+folder `oceanembed/harmonized/`. Nothing else is ever transferred.
+
+Later: `WEBSITE.md` for the frontend, `PERSON3_RESULTS.md` for slides.
 Current results on real data: `REAL_DATA_RESULTS.md`.
 
 ## What this project does
