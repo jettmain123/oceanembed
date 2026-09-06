@@ -17,7 +17,7 @@
   h1{margin:0;font-size:25px;letter-spacing:-.02em}
   h1 span{color:var(--accent)}
   .sub{color:var(--dim);margin-top:5px;max-width:78ch;font-size:14px}
-  main{padding:20px 30px 50px;max-width:1500px}
+  main{padding:20px 30px 70px;max-width:1500px}
   .row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px}
   @media(max-width:1080px){.row{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px 17px}
@@ -78,7 +78,6 @@
   tr.up td:first-child::before{content:"\u25B2 ";color:#ff7b72;font-size:10px}
   .warnbox{border-left:3px solid var(--warn);padding:10px 14px;margin-top:13px;
            background:#191509;border-radius:0 6px 6px 0;font-size:13px}
-  footer{color:var(--dim);font-size:12.5px;padding:0 30px 40px;max-width:1500px}
 </style>
 </head>
 <body>
@@ -181,24 +180,9 @@
   <div class="card">
     <h2>Where it works &mdash; and where it does not</h2>
     <table id="clim"></table>
-    <div class="warnbox">
-      <b>Skill above climatology</b> compares the model against simply predicting the average
-      profile for that location, which needs no satellite data at all. Positive means the
-      surface observations genuinely add information.
-      <b>Below about 300 m it turns negative</b> &mdash; the surface stops constraining
-      temperature that deep, so we do not claim skill there. That is physics, not a defect,
-      and the range where it does work is the range that matters operationally: cyclone heat
-      content and the thermocline both sit in the upper 200 m.
-    </div>
   </div>
 </div>
 </main>
-
-<footer>
-  Trained on GLORYS reanalysis, evaluated on days never seen in training.
-  Every value shown is precomputed &mdash; the page runs no model and needs no server.
-  Basemap tiles &copy; Esri, GEBCO, NOAA and contributors.
-</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.6.0/maplibre-gl.js"></script>
 <script>
