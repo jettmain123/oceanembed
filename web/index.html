@@ -39,6 +39,7 @@
   .tabgroup{color:var(--dim);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
             align-self:center;margin-right:4px}
   #fishlayers button.on{background:#3fa66a;border-color:#3fa66a;color:#04170d}
+  #fishtoggle.on{background:#3fa66a;border-color:#3fa66a;color:#04170d;font-weight:600}
   .tabs button.on{background:var(--accent);border-color:var(--accent);color:#04101f;font-weight:600}
   button.toggle{background:none;border:1px solid var(--line);color:var(--dim);padding:6px 12px;
     border-radius:6px;cursor:pointer;font:inherit;font-size:13.5px}
@@ -100,11 +101,10 @@
     <h2>Basin temperature</h2>
     <div class="tabs" id="layers">
       <button data-l="T" class="on">Temperature</button>
-      <button data-l="0">Cyclone heat (TCHP)</button>
       <button data-l="4">RI risk</button>
+      <button id="fishtoggle">Fisheries &rsaquo;</button>
     </div>
-    <div class="tabs" id="fishlayers" style="margin-top:7px">
-      <span class="tabgroup">Fisheries</span>
+    <div class="tabs" id="fishlayers" style="margin-top:7px;display:none">
       <button data-l="5">Oil sardine</button>
       <button data-l="6">Indian mackerel</button>
       <button data-l="7">Skipjack tuna</button>
@@ -125,7 +125,6 @@
         <option value="dark">Dark</option>
         <option value="ocean">Bathymetry</option>
       </select>
-      <button id="d3" class="toggle">3D seafloor</button>
     </div>
     <div class="ctl">
       <label for="depth">Depth</label>
@@ -136,11 +135,6 @@
       <label for="date">Day</label>
       <input type="range" id="date" min="0" max="0" value="0">
       <span class="val" id="datev"></span>
-    </div>
-    <div class="ctl" id="exagrow" style="display:none">
-      <label for="exag">Relief</label>
-      <input type="range" id="exag" min="1" max="60" value="18">
-      <span class="val" id="exagv">18x</span>
     </div>
     <div class="ctl">
       <label for="opac">Opacity</label>
@@ -373,15 +367,7 @@ function initMap(){
         base:{type:"raster",tiles:[BASEMAPS.dark.base],tileSize:256,attribution:ESRI_ATTR},
         baseref:{type:"raster",tiles:[BASEMAPS.dark.ref],tileSize:256},
         field:{type:"image",url:renderCanvas(),
-               coordinates:[[W,N],[E,N],[E,S],[W,S]]},
-        // Terrarium DEM: free, no key, and it carries BATHYMETRY -- elevations
-        // below sea level -- so the shelf and the deep basin are real geometry.
-        // That matters here, because the shelf is exactly where GLORYS runs out
-        // of deep water and our coverage stops.
-        dem:{type:"raster-dem",
-             tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-             encoding:"terrarium", tileSize:256, maxzoom:12,
-             attribution:"Elevation: Mapzen / AWS Terrain Tiles, GEBCO, SRTM"}
+               coordinates:[[W,N],[E,N],[E,S],[W,S]]}
       },
       layers:[
         {id:"base",type:"raster",source:"base"},
@@ -389,12 +375,10 @@ function initMap(){
          paint:{"raster-opacity":+$("opac").value/100,"raster-resampling":"nearest"}},
         // place names sit ON TOP of the data so the basin stays readable
         {id:"baseref",type:"raster",source:"baseref",paint:{"raster-opacity":0.9}}
-      ],
-      sky:{"sky-color":"#0a1524","horizon-color":"#12243a","fog-color":"#080d16",
-           "sky-horizon-blend":0.6,"horizon-fog-blend":0.5,"fog-ground-blend":0.2}
+      ]
     },
     bounds:[[45,5],[105,30]], fitBoundsOptions:{padding:12},
-    attributionControl:{compact:true}, maxPitch:80
+    attributionControl:{compact:true}
   });
   map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
   map.on("load",()=>{
@@ -410,23 +394,6 @@ function initMap(){
   });
   map.getCanvas().style.cursor="crosshair";
 
-  let is3d=false;
-  $("d3").onclick=()=>{
-    is3d=!is3d;
-    $("d3").classList.toggle("on", is3d);
-    $("exagrow").style.display = is3d ? "flex" : "none";
-    if(is3d){
-      map.setTerrain({source:"dem", exaggeration:+$("exag").value});
-      map.easeTo({pitch:62, bearing:-18, duration:900});
-    }else{
-      map.setTerrain(null);
-      map.easeTo({pitch:0, bearing:0, duration:700});
-    }
-  };
-  $("exag").oninput=e=>{
-    $("exagv").textContent=e.target.value+"x";
-    if(is3d) map.setTerrain({source:"dem", exaggeration:+e.target.value});
-  };
 }
 
 let mk=null;
@@ -701,14 +668,30 @@ $("region").onchange=e=>{
   const b=REGIONS[+e.target.value][1];
   map.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:24,duration:700});
 };
-for(const b of document.querySelectorAll("#layers button, #fishlayers button")) b.onclick=()=>{
+// "Fisheries" is a GROUP, not a layer: it reveals the species row and hands the
+// selection to whichever species was last open (oil sardine to begin with).
+// Picking a top-row layer closes the group again, so only one row is ever live.
+function selectLayer(b){
   document.querySelectorAll("#layers button, #fishlayers button")
     .forEach(x=>x.classList.remove("on"));
   b.classList.add("on"); layer=b.dataset.l;
+  const inFish=b.parentElement.id==="fishlayers";
+  $("fishlayers").style.display = inFish ? "flex" : "none";
+  if(inFish) $("fishtoggle").classList.add("on");
   const off=(layer!=="T");
   $("depth").disabled=off;
   $("depth").parentElement.style.opacity=off?.4:1;
   refresh();
+}
+for(const b of document.querySelectorAll("#layers button[data-l], #fishlayers button"))
+  b.onclick=()=>selectLayer(b);
+$("fishtoggle").onclick=()=>{
+  const row=$("fishlayers");
+  const open=row.style.display!=="none";
+  if(open && layer>=5){ return; }          // already in the group, leave it be
+  row.style.display="flex";
+  const cur=row.querySelector("button.on") || row.querySelector("button");
+  selectLayer(cur);
 };
 loadIndex();
 </script>
