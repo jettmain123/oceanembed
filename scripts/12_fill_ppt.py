@@ -281,6 +281,15 @@ def main() -> None:
          f"same alarm ~{100*tchp_t['recall']:.0f}% of the time. Depth of the 26 °C "
          f"isotherm tracks at r = {d26_corr:.2f}. Exposure is resolved onto 30 named "
          "coastal segments from Gujarat to West Bengal.", "b"),
+        ("Retrospective test — Cyclone Dana, October 2024", "h"),
+        ("On days the model had never seen, the risk index for Paradip-Kendrapara "
+         "and Balasore-Bhadrak stepped from ELEVATED to HIGH on 24 October — the "
+         "stretch of Odisha coast where Cyclone Dana came ashore — with "
+         "reconstructed heat potential rising from ~70 to ~98 kJ/cm2 and holding "
+         "for a week. We do not claim to have detected the storm; we have no "
+         "atmospheric data. What we show is that the ocean beneath its track was "
+         "carrying rapid-intensification-grade heat, read from satellites alone, "
+         "on held-out data.", "b"),
         ("Fisheries — extending an advisory INCOIS already issues", "h"),
         ("The INCOIS Potential Fishing Zone advisory today uses surface temperature "
          "and chlorophyll, with no subsurface term. We add thermal habitat scored on "
