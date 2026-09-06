@@ -32,11 +32,20 @@ from numpy.lib.stride_tricks import sliding_window_view
 from oceanembed import ensure_dirs, load_config, resolve
 from oceanembed.evaluate import load_card
 from oceanembed.inference import Predictor
+from oceanembed.habitat import SPECIES, front_index, habitat_suitability, ild
 from oceanembed.products import d26, mld, tchp
 from oceanembed.risk import DISCLAIMER, build_alerts, risk_index
 
 T_MIN, T_MAX = -2.0, 40.0          # covers every ocean temperature we will meet
 SCALE = (T_MAX - T_MIN) / 65533.0
+
+
+# The habitat layers the viewer offers, in tab order. Each is a transparent
+# threshold-and-taper score on temperature at the species' preferred depth and
+# on the isothermal layer depth -- an advisory about WATER PROPERTIES. Nothing
+# here is trained on catch data, so none of it is a claim that fish are present.
+FISH = ["indian_oil_sardine", "indian_mackerel", "skipjack_tuna", "yellowfin_tuna"]
+N_PROD = 5 + len(FISH) + 1          # + front index at 100 m
 
 
 def encode(arr: np.ndarray) -> np.ndarray:
@@ -161,7 +170,8 @@ def main() -> None:
         # Operational products, computed per cell from the SAME profiles. This is
         # what a forecaster acts on -- TCHP above ~50 kJ/cm2 is the cyclone
         # rapid-intensification threshold.
-        prod = np.full((2, 5, ny, nx), np.nan, np.float32)
+        prod = np.full((2, N_PROD, ny, nx), np.nan, np.float32)
+        kf = int(np.argmin(np.abs(depths - 100.0)))
         for w, field in ((0, pred), (1, ref)):
             flat = field.reshape(nz, -1).T                                  # (ny*nx, nz)
             good = np.isfinite(flat).all(axis=1)
@@ -170,6 +180,15 @@ def main() -> None:
                 prod[w, 0].reshape(-1)[good] = tchp(g, depths)
                 prod[w, 1].reshape(-1)[good] = d26(g, depths)
                 prod[w, 2].reshape(-1)[good] = mld(g, depths)
+                # thermal habitat, scored on the same profiles
+                i_ld = ild(g, depths)
+                for j, sp in enumerate(FISH):
+                    prod[w, 5 + j].reshape(-1)[good] = habitat_suitability(
+                        g, depths, sp, i_ld)
+            # the front index is a horizontal gradient, so it is computed on the
+            # 2-D field rather than per profile -- at 100 m, where no satellite
+            # can see it and where it is often sharper than at the surface
+            prod[w, 5 + len(FISH)] = front_index(field[kf], lat, lon)
         # uncertainty and rule-based risk, for the prediction only -- the
         # reference has neither, so those slots stay NaN
         if iy.size:
@@ -209,14 +228,20 @@ def main() -> None:
         "lon": [float(lon[0]), float(lon[-1])],
         "encoding": {"t_min": T_MIN, "scale": SCALE, "missing": 0},
         "products": {
-            "names": ["TCHP", "D26", "MLD", "UNC", "RISK"],
-            "units": ["kJ/cm2", "m", "m", "degC", "level"],
+            "names": ["TCHP", "D26", "MLD", "UNC", "RISK"]
+                     + [s.upper() for s in FISH] + ["FRONT100"],
+            "units": ["kJ/cm2", "m", "m", "degC", "level"]
+                     + ["0-1"] * len(FISH) + ["degC/100km"],
             "labels": ["Cyclone heat potential", "26 degC isotherm depth",
                        "Mixed layer depth", "Model uncertainty at 100 m",
-                       "RI risk level"],
+                       "RI risk level"]
+                      + [SPECIES[s]["label"] for s in FISH]
+                      + ["Thermal front strength at 100 m"],
+            "fisheries_from": 5,
+            "species_notes": {SPECIES[s]["label"]: SPECIES[s]["note"] for s in FISH},
             "byte_offset": int(2 * nz * ny * nx * 2),   # after the uint16 temperature block
             "dtype": "float32",
-            "shape": [2, 5, int(ny), int(nx)],
+            "shape": [2, int(N_PROD), int(ny), int(nx)],
         },
         "alerts": alerts_by_day,
         "disclaimer": DISCLAIMER,
