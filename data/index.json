@@ -139,27 +139,49 @@
    "D26",
    "MLD",
    "UNC",
-   "RISK"
+   "RISK",
+   "INDIAN_OIL_SARDINE",
+   "INDIAN_MACKEREL",
+   "SKIPJACK_TUNA",
+   "YELLOWFIN_TUNA",
+   "FRONT100"
   ],
   "units": [
    "kJ/cm2",
    "m",
    "m",
    "degC",
-   "level"
+   "level",
+   "0-1",
+   "0-1",
+   "0-1",
+   "0-1",
+   "degC/100km"
   ],
   "labels": [
    "Cyclone heat potential",
    "26 degC isotherm depth",
    "Mixed layer depth",
    "Model uncertainty at 100 m",
-   "RI risk level"
+   "RI risk level",
+   "Indian oil sardine (Sardinella longiceps)",
+   "Indian mackerel (Rastrelliger kanagurta)",
+   "Skipjack tuna (Katsuwonus pelamis)",
+   "Yellowfin tuna (Thunnus albacares)",
+   "Thermal front strength at 100 m"
   ],
+  "fisheries_from": 5,
+  "species_notes": {
+   "Indian oil sardine (Sardinella longiceps)": "coastal pelagic, shallow shelf waters",
+   "Indian mackerel (Rastrelliger kanagurta)": "coastal pelagic, often just above the thermocline",
+   "Skipjack tuna (Katsuwonus pelamis)": "surface-associated; favours a shallow, well-defined thermocline",
+   "Yellowfin tuna (Thunnus albacares)": "forages down to and below the thermocline"
+  },
   "byte_offset": 1460460,
   "dtype": "float32",
   "shape": [
    2,
-   5,
+   10,
    101,
    241
   ]
