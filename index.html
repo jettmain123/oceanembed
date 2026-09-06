@@ -55,6 +55,23 @@
   th:first-child,td:first-child{text-align:left}
   .pos{color:#5fd39b}.neg{color:#ff7b72}
   .note{color:var(--dim);font-size:12.5px;margin-top:9px}
+  .esc{border:1px solid #7a2e26;background:linear-gradient(180deg,#2a120e,#1c0d0a);
+       border-radius:9px;padding:13px 15px;margin-bottom:13px}
+  .esc.quiet{border-color:#1e3a2b;background:linear-gradient(180deg,#0d1a14,#0b1410)}
+  .esc h3{margin:0 0 3px;font-size:15px;letter-spacing:.01em}
+  .esc .sub2{color:#c9a9a3;font-size:12.5px;margin-bottom:9px}
+  .esc.quiet .sub2{color:#8fa3bf}
+  .esc ul{margin:0;padding-left:0;list-style:none}
+  .esc li{padding:5px 0;border-top:1px solid #3a1c17;font-size:13.5px;
+          display:flex;gap:9px;flex-wrap:wrap;align-items:baseline}
+  .esc li:first-child{border-top:0}
+  .esc .seg{font-weight:600;min-width:190px}
+  .esc .reg{color:#c9a9a3;font-size:12.5px}
+  .esc .jump{color:#ff7b72;font-variant-numeric:tabular-nums;font-weight:600}
+  .esc .new{background:#7a2e26;color:#ffe9e6;border-radius:4px;padding:1px 6px;
+            font-size:11px;letter-spacing:.04em}
+  tr.up td{background:#1c0d0a}
+  tr.up td:first-child::before{content:"\u25B2 ";color:#ff7b72;font-size:10px}
   .warnbox{border-left:3px solid var(--warn);padding:10px 14px;margin-top:13px;
            background:#191509;border-radius:0 6px 6px 0;font-size:13px}
   footer{color:var(--dim);font-size:12.5px;padding:0 30px 40px;max-width:1500px}
@@ -66,6 +83,12 @@
   <div class="sub">Temperature at 15 depths from 0 to 1000 m across the North Indian Ocean,
     reconstructed from surface observations alone: SST, salinity, sea level, currents and wind.
     <span id="domain"></span></div>
+  <div style="margin-top:12px;display:flex;gap:8px">
+    <a href="index.html" style="color:#04101f;background:#4da3ff;border:1px solid #4da3ff;
+       text-decoration:none;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600">Basin viewer</a>
+    <a href="model.html" style="color:#8fa3bf;border:1px solid #1e2b42;text-decoration:none;
+       padding:5px 12px;border-radius:6px;font-size:13px">The model</a>
+  </div>
 </header>
 
 <main>
@@ -165,6 +188,7 @@
       demonstration objects &mdash; nothing is transmitted and nothing is connected to any
       alerting system.
     </div>
+    <div id="escalation"></div>
     <table id="alerts"></table>
     <div class="note" id="alertnote"></div>
   </div>
@@ -251,7 +275,11 @@ function val(which,z,y,x){
 }
 function pval(which,k,y,x){
   const [nz,ny,nx]=IX.shape;
-  const v=PROD[which*3*ny*nx + k*ny*nx + y*nx + x];
+  // stride is the NUMBER OF PRODUCTS, read from the index -- hardcoding it
+  // silently made every reference/difference view read into the prediction
+  // block once the export grew past three products.
+  const np=IX.products.shape[1];
+  const v=PROD[which*np*ny*nx + k*ny*nx + y*nx + x];
   return Number.isFinite(v)?v:NaN;
 }
 // grid <-> geography. lat[0] is the SOUTH edge.
@@ -282,7 +310,7 @@ async function loadDay(i){
   const buf=await (await fetch(`data/day_${String(i).padStart(3,"0")}.bin`)).arrayBuffer();
   const off=IX.products.byte_offset;
   DAY=new Uint16Array(buf,0,off/2);
-  PROD=new Float32Array(buf,off);          // [2,3,ny,nx] TCHP, D26, MLD
+  PROD=new Float32Array(buf,off);          // [2,nProducts,ny,nx]
   dayIdx=i;
 }
 
@@ -610,21 +638,76 @@ function buildClim(){
 
 function buildAlerts(){
   const all=IX.alerts||{};
-  const day=IX.dates[Math.max(0,dayIdx)]||IX.dates[IX.dates.length-1];
-  const rows=(all[day]||[]).slice(0,10);
-  let s='<tr><th>coastal segment</th><th>region</th><th>level</th>'+
+  const di=Math.max(0,dayIdx);
+  const day=IX.dates[di]||IX.dates[IX.dates.length-1];
+  const today=all[day]||[];
+  const prevDay=di>0?IX.dates[di-1]:null;
+  const prev=prevDay?(all[prevDay]||[]):[];
+
+  // A list that says HIGH on every segment every day is wallpaper, not a warning.
+  // What a duty forecaster needs is what CHANGED since yesterday, so that is what
+  // gets the top of the card and the colour.
+  const RANK={LOW:0,WATCH:1,ELEVATED:2,HIGH:3};
+  const before={};
+  for(const a of prev) before[a.segment]={lv:RANK[a.level]??0, t:a.peak_tchp_kj_cm2};
+
+  const risen=[];
+  for(const a of today){
+    const now=RANK[a.level]??0, was=before[a.segment];
+    const dLv=was?now-was.lv:(now>=2?now:0);
+    const dT =was?a.peak_tchp_kj_cm2-was.t:null;
+    if(dLv>0 || (dT!==null && dT>=12)){
+      risen.push({...a, dLv, dT, fresh:!was, wasLevel:was?
+        Object.keys(RANK).find(k=>RANK[k]===was.lv):null});
+    }
+  }
+  risen.sort((x,y)=>(y.dLv-x.dLv)||((y.dT??0)-(x.dT??0)));
+
+  const box=$("escalation");
+  if(risen.length){
+    const nHigh=risen.filter(r=>r.level==="HIGH").length;
+    box.className="esc";
+    box.innerHTML=`<h3 style="color:#ff7b72">Escalation on ${day}`+
+      ` &mdash; ${risen.length} coastal segment${risen.length===1?"":"s"} rose</h3>`+
+      `<div class="sub2">${nHigh} now at HIGH. Ranked by how far each moved since `+
+      `${prevDay||"the previous day"}, not by absolute heat &mdash; in this basin almost `+
+      `everywhere is above the threshold almost always, so the change is the signal.</div>`+
+      "<ul>"+risen.slice(0,8).map(r=>
+        `<li><span class="seg">${r.segment}</span>`+
+        `<span class="reg">${r.region}</span>`+
+        (r.fresh?'<span class="new">NEW</span>':
+          `<span class="jump">${r.wasLevel} &rarr; ${r.level}</span>`)+
+        (r.dT!==null?`<span class="jump">${r.dT>=0?"+":""}${r.dT.toFixed(1)} kJ/cm&sup2;</span>`:"")+
+        `<span class="reg">nearest ${r.nearest_flagged_km} km offshore</span></li>`).join("")+
+      "</ul>";
+  }else{
+    box.className="esc quiet";
+    box.innerHTML=`<h3 style="color:#5fd39b">No escalation on ${day}</h3>`+
+      `<div class="sub2">Segments below are steady or easing against `+
+      `${prevDay||"the previous day"}. Steady HIGH is the normal state of this ocean; `+
+      `it is the movement that matters.</div>`;
+  }
+
+  const up=new Set(risen.map(r=>r.segment));
+  // escalated segments first, then the rest by heat
+  const ordered=[...today].sort((a,b)=>
+    (up.has(b.segment)-up.has(a.segment)) || (b.peak_tchp_kj_cm2-a.peak_tchp_kj_cm2));
+  const rows=ordered.slice(0,12);
+  let s2='<tr><th>coastal segment</th><th>region</th><th>level</th>'+
         '<th>peak TCHP</th><th>nearest</th><th>spread</th></tr>';
-  if(!rows.length) s+='<tr><td colspan="6" style="color:#8fa3bf">'+
+  if(!rows.length) s2+='<tr><td colspan="6" style="color:#8fa3bf">'+
         'No segments met the rule on this date.</td></tr>';
   for(const a of rows)
-    s+=`<tr><td>${a.segment}</td><td style="text-align:left">${a.region}</td>`+
+    s2+=`<tr class="${up.has(a.segment)?"up":""}"><td>${a.segment}</td>`+
+       `<td style="text-align:left">${a.region}</td>`+
        `<td class="${a.level==="HIGH"?"neg":""}">${a.level}</td>`+
        `<td>${a.peak_tchp_kj_cm2}</td><td>${a.nearest_flagged_km} km</td>`+
        `<td>${a.model_spread_degC ?? "-"}</td></tr>`;
-  $("alerts").innerHTML=s;
-  const n=(all[day]||[]).length;
+  $("alerts").innerHTML=s2;
+  const n=today.length;
   $("alertnote").textContent=`${day} — ${n} segment${n===1?"":"s"} met the rule`+
-    (n>10?" (showing 10)":"")+". Change the date to step through the record.";
+    (n>12?" (showing 12; escalated first)":"")+
+    ". Step the date to watch the coast light up and settle.";
 }
 
 // ---- events ----------------------------------------------------------------

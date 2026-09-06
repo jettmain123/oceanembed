@@ -1,0 +1,794 @@
+{
+  "name": "OceanEmbed",
+  "task": "Reconstruct the ocean temperature profile at 15 standard depths (0-1000 m) from satellite-observable surface fields alone.",
+  "total_params": 776449,
+  "checkpoint": {
+    "epoch": 5,
+    "val_loss": 0.7561913114123874,
+    "target": "anomaly"
+  },
+  "architecture": {
+    "input_shape": [
+      7,
+      9,
+      9
+    ],
+    "encoder": "cnn",
+    "embed_dim": 128,
+    "head_hidden": 256,
+    "depth_attention": true,
+    "surface_skip": true,
+    "n_depths": 15,
+    "blocks": [
+      {
+        "block": "conv block 1  (7 -> 64 ch)",
+        "params": 4352
+      },
+      {
+        "block": "conv block 2  (64 -> 96 ch)",
+        "params": 55776
+      },
+      {
+        "block": "conv block 3  (96 -> 128 ch)",
+        "params": 111232
+      },
+      {
+        "block": "channel reduce  (128 -> 32)",
+        "params": 4128
+      },
+      {
+        "block": "projection to latent  (-> 128-d)",
+        "params": 364672
+      },
+      {
+        "block": "depth queries  (15 x 256)",
+        "params": 3840
+      },
+      {
+        "block": "head trunk",
+        "params": 100608
+      },
+      {
+        "block": "depth attention  (key/value)",
+        "params": 131584
+      },
+      {
+        "block": "output",
+        "params": 257
+      }
+    ]
+  },
+  "depths": [
+    0.0,
+    5.0,
+    10.0,
+    20.0,
+    30.0,
+    50.0,
+    75.0,
+    100.0,
+    125.0,
+    150.0,
+    200.0,
+    300.0,
+    500.0,
+    700.0,
+    1000.0
+  ],
+  "depth_weights": [
+    1.0,
+    1.0,
+    1.0,
+    1.1,
+    1.2,
+    1.5,
+    1.8,
+    2.0,
+    2.0,
+    2.0,
+    1.8,
+    1.5,
+    1.0,
+    0.8,
+    0.6
+  ],
+  "surface_vars": [
+    "sst",
+    "sss",
+    "sla",
+    "ucur",
+    "vcur",
+    "uwind",
+    "vwind"
+  ],
+  "input_importance": [
+    {
+      "name": "sst",
+      "label": "Sea surface temperature",
+      "cost_pct": 6.44848691400758,
+      "rmse_without": 0.9340421174604708
+    },
+    {
+      "name": "sla",
+      "label": "Sea level anomaly",
+      "cost_pct": 2.470623373979882,
+      "rmse_without": 0.8991379850335086
+    },
+    {
+      "name": "vwind",
+      "label": "Surface wind, north",
+      "cost_pct": 0.512240848795417,
+      "rmse_without": 0.8819539760010592
+    },
+    {
+      "name": "uwind",
+      "label": "Surface wind, east",
+      "cost_pct": 0.4092246523090156,
+      "rmse_without": 0.8810500508341697
+    },
+    {
+      "name": "vcur",
+      "label": "Surface current, north",
+      "cost_pct": -0.8125826228377047,
+      "rmse_without": 0.8703291896224122
+    },
+    {
+      "name": "sss",
+      "label": "Sea surface salinity",
+      "cost_pct": -0.9908270975907738,
+      "rmse_without": 0.8687651669533208
+    },
+    {
+      "name": "ucur",
+      "label": "Surface current, east",
+      "cost_pct": -1.350796509100155,
+      "rmse_without": 0.8656065819786106
+    }
+  ],
+  "training": {
+    "target": "anomaly",
+    "channel_dropout": 0.15,
+    "batch_size": 256,
+    "lr": 0.0008,
+    "optimizer": "AdamW + cosine annealing",
+    "split": "chronological -- every held-out day is after every training day",
+    "convergence": {
+      "best_epoch": 5,
+      "best_val": 0.7561913114123874,
+      "final_epoch": 40,
+      "final_val": 0.8305955040575278,
+      "final_train": 0.17153244007165264,
+      "curve": [
+        {
+          "epoch": 1,
+          "train": 0.5618524874370315,
+          "val": 0.7916798618586377
+        },
+        {
+          "epoch": 2,
+          "train": 0.4863636553894942,
+          "val": 0.7692384177988226
+        },
+        {
+          "epoch": 3,
+          "train": 0.4473997439978735,
+          "val": 0.8293971963843914
+        },
+        {
+          "epoch": 4,
+          "train": 0.4206225397075564,
+          "val": 0.8629664029497088
+        },
+        {
+          "epoch": 5,
+          "train": 0.3991212754467237,
+          "val": 0.7561913114123874
+        },
+        {
+          "epoch": 6,
+          "train": 0.3822130834752587,
+          "val": 0.8154538460452148
+        },
+        {
+          "epoch": 7,
+          "train": 0.3657468027040964,
+          "val": 0.8590734519862165
+        },
+        {
+          "epoch": 8,
+          "train": 0.35062235412071213,
+          "val": 0.7929512960742219
+        },
+        {
+          "epoch": 9,
+          "train": 0.31709183146366393,
+          "val": 0.7800843827411382
+        },
+        {
+          "epoch": 10,
+          "train": 0.2940295020865787,
+          "val": 0.8321172473888204
+        },
+        {
+          "epoch": 11,
+          "train": 0.27790124055180077,
+          "val": 0.7987486268053151
+        },
+        {
+          "epoch": 12,
+          "train": 0.2658659238040827,
+          "val": 0.8348174899033826
+        },
+        {
+          "epoch": 13,
+          "train": 0.2566251115409179,
+          "val": 0.8440192408513542
+        },
+        {
+          "epoch": 14,
+          "train": 0.2491104046478393,
+          "val": 0.8036815553722959
+        },
+        {
+          "epoch": 15,
+          "train": 0.24204522264864287,
+          "val": 0.8016104869168215
+        },
+        {
+          "epoch": 16,
+          "train": 0.23454502301231311,
+          "val": 0.8134253105491098
+        },
+        {
+          "epoch": 17,
+          "train": 0.22927882655917206,
+          "val": 0.7799011529094041
+        },
+        {
+          "epoch": 18,
+          "train": 0.2239578166369926,
+          "val": 0.8302659005829782
+        },
+        {
+          "epoch": 19,
+          "train": 0.2187717888385627,
+          "val": 0.8345702326418173
+        },
+        {
+          "epoch": 20,
+          "train": 0.21345147625149688,
+          "val": 0.8287576410987161
+        },
+        {
+          "epoch": 21,
+          "train": 0.2086573504098155,
+          "val": 0.8513675196483882
+        },
+        {
+          "epoch": 22,
+          "train": 0.20514668269901518,
+          "val": 0.8392972989997478
+        },
+        {
+          "epoch": 23,
+          "train": 0.20202384677409113,
+          "val": 0.8476617390218407
+        },
+        {
+          "epoch": 24,
+          "train": 0.19829048397308197,
+          "val": 0.8157109681524412
+        },
+        {
+          "epoch": 25,
+          "train": 0.19463694477536875,
+          "val": 0.8113989328133939
+        },
+        {
+          "epoch": 26,
+          "train": 0.19094317525688503,
+          "val": 0.8069051157344471
+        },
+        {
+          "epoch": 27,
+          "train": 0.18892329459610513,
+          "val": 0.818981932823104
+        },
+        {
+          "epoch": 28,
+          "train": 0.1868830602905553,
+          "val": 0.8123976384750521
+        },
+        {
+          "epoch": 29,
+          "train": 0.18391000924216713,
+          "val": 0.8266804546298403
+        },
+        {
+          "epoch": 30,
+          "train": 0.18228615117680494,
+          "val": 0.8432823824160027
+        },
+        {
+          "epoch": 31,
+          "train": 0.17922686452445458,
+          "val": 0.8151129217340488
+        },
+        {
+          "epoch": 32,
+          "train": 0.1783047640488153,
+          "val": 0.8264723885661424
+        },
+        {
+          "epoch": 33,
+          "train": 0.17746248458854205,
+          "val": 0.8234407693689519
+        },
+        {
+          "epoch": 34,
+          "train": 0.1757141949492655,
+          "val": 0.8301980094717006
+        },
+        {
+          "epoch": 35,
+          "train": 0.1744592962649724,
+          "val": 0.8316025375597405
+        },
+        {
+          "epoch": 36,
+          "train": 0.1733756115140429,
+          "val": 0.8286369486047764
+        },
+        {
+          "epoch": 37,
+          "train": 0.17331401210934747,
+          "val": 0.8298829617644802
+        },
+        {
+          "epoch": 38,
+          "train": 0.17201874983791587,
+          "val": 0.8355684021747474
+        },
+        {
+          "epoch": 39,
+          "train": 0.17206690606671027,
+          "val": 0.830503412497164
+        },
+        {
+          "epoch": 40,
+          "train": 0.17153244007165264,
+          "val": 0.8305955040575278
+        }
+      ]
+    }
+  },
+  "validation": {
+    "vs_glorys": {
+      "mean_corr": 0.8861757244122865,
+      "mean_rmse": 0.8774592711825198,
+      "skill_vs_clim": 0.1623955118148521,
+      "n_holdout": 93600,
+      "per_depth": [
+        {
+          "depth_m": 0.0,
+          "corr": 0.8719620552932397,
+          "rmse": 0.5378412737567922,
+          "bias": -0.012968715826670328
+        },
+        {
+          "depth_m": 5.0,
+          "corr": 0.8719838962271306,
+          "rmse": 0.5377926744932852,
+          "bias": -0.012409338400914119
+        },
+        {
+          "depth_m": 10.0,
+          "corr": 0.8724251236293966,
+          "rmse": 0.5438133712729178,
+          "bias": -0.005512801317068247
+        },
+        {
+          "depth_m": 20.0,
+          "corr": 0.8742214608259604,
+          "rmse": 0.5746735576962496,
+          "bias": 0.007599977366944664
+        },
+        {
+          "depth_m": 30.0,
+          "corr": 0.8638395414743476,
+          "rmse": 0.6889471815930039,
+          "bias": 0.07679199986987643
+        },
+        {
+          "depth_m": 50.0,
+          "corr": 0.8270566412926985,
+          "rmse": 1.146048176048705,
+          "bias": 0.4338094691129831
+        },
+        {
+          "depth_m": 75.0,
+          "corr": 0.7752284518234536,
+          "rmse": 1.7577766826372907,
+          "bias": 0.9826508334966806
+        },
+        {
+          "depth_m": 100.0,
+          "corr": 0.8180556062482855,
+          "rmse": 1.9086828145209507,
+          "bias": 1.2955601978811444
+        },
+        {
+          "depth_m": 125.0,
+          "corr": 0.8683237170820391,
+          "rmse": 1.6839685846235466,
+          "bias": 1.1831205255557329
+        },
+        {
+          "depth_m": 150.0,
+          "corr": 0.8862015142192385,
+          "rmse": 1.429278882303203,
+          "bias": 0.9133971834794069
+        },
+        {
+          "depth_m": 200.0,
+          "corr": 0.9072565996120668,
+          "rmse": 1.0310399849315468,
+          "bias": 0.5786859979384985
+        },
+        {
+          "depth_m": 300.0,
+          "corr": 0.9538407423391457,
+          "rmse": 0.49407548117831,
+          "bias": 0.20113946423571333
+        },
+        {
+          "depth_m": 500.0,
+          "corr": 0.9804573662167314,
+          "rmse": 0.24122674596484914,
+          "bias": 0.08221400948671194
+        },
+        {
+          "depth_m": 700.0,
+          "corr": 0.9673509471556307,
+          "rmse": 0.28397300345212906,
+          "bias": -0.009185213680960175
+        },
+        {
+          "depth_m": 1000.0,
+          "corr": 0.9544322027449317,
+          "rmse": 0.30275065326501877,
+          "bias": 0.09174800928331849
+        }
+      ],
+      "skill_per_depth": [
+        {
+          "depth_m": 0.0,
+          "skill": 0.40949427604748
+        },
+        {
+          "depth_m": 5.0,
+          "skill": 0.40960098725802074
+        },
+        {
+          "depth_m": 10.0,
+          "skill": 0.40664303008165614
+        },
+        {
+          "depth_m": 20.0,
+          "skill": 0.3923835572381128
+        },
+        {
+          "depth_m": 30.0,
+          "skill": 0.3237917016902091
+        },
+        {
+          "depth_m": 50.0,
+          "skill": 0.23517336226805108
+        },
+        {
+          "depth_m": 75.0,
+          "skill": 0.2319145922808621
+        },
+        {
+          "depth_m": 100.0,
+          "skill": 0.22213098191397995
+        },
+        {
+          "depth_m": 125.0,
+          "skill": 0.2544997271778786
+        },
+        {
+          "depth_m": 150.0,
+          "skill": 0.21880460346944908
+        },
+        {
+          "depth_m": 200.0,
+          "skill": -0.023205430901597435
+        },
+        {
+          "depth_m": 300.0,
+          "skill": 0.03991734890362719
+        },
+        {
+          "depth_m": 500.0,
+          "skill": 0.011253734872755605
+        },
+        {
+          "depth_m": 700.0,
+          "skill": -0.1987884907632851
+        },
+        {
+          "depth_m": 1000.0,
+          "skill": -0.49768130431441815
+        }
+      ]
+    },
+    "vs_argo": {
+      "n_profiles": 40000,
+      "n_argo_days": 18,
+      "holdout_only": true,
+      "our_rmse_vs_argo_degC": 1.2420644362767537,
+      "glorys_rmse_vs_argo_degC": 1.1574174225330354,
+      "excess_over_glorys_degC": 0.0846470137437183,
+      "excess_over_glorys_pct": 7.313438703770877,
+      "per_depth": [
+        {
+          "depth_m": 0.0,
+          "n": 40000,
+          "rmse": 0.8761208653450012,
+          "glorys_rmse": 0.8540111780166626,
+          "gap": 0.022109687328338623,
+          "bias": 0.2773532271385193,
+          "corr": 0.698794191002413
+        },
+        {
+          "depth_m": 5.0,
+          "n": 40000,
+          "rmse": 0.8764421343803406,
+          "glorys_rmse": 0.8540111780166626,
+          "gap": 0.02243095636367798,
+          "bias": 0.2781938910484314,
+          "corr": 0.6988308400401446
+        },
+        {
+          "depth_m": 10.0,
+          "n": 40000,
+          "rmse": 0.9273831248283386,
+          "glorys_rmse": 0.8875901103019714,
+          "gap": 0.03979301452636719,
+          "bias": 0.3625021278858185,
+          "corr": 0.7105751945686252
+        },
+        {
+          "depth_m": 20.0,
+          "n": 40000,
+          "rmse": 1.1273211240768433,
+          "glorys_rmse": 1.1083561182022095,
+          "gap": 0.01896500587463379,
+          "bias": 0.373203843832016,
+          "corr": 0.5602070535451201
+        },
+        {
+          "depth_m": 30.0,
+          "n": 40000,
+          "rmse": 1.0696407556533813,
+          "glorys_rmse": 1.053038477897644,
+          "gap": 0.016602277755737305,
+          "bias": 0.4398699104785919,
+          "corr": 0.6691739489634393
+        },
+        {
+          "depth_m": 50.0,
+          "n": 40000,
+          "rmse": 1.2555668354034424,
+          "glorys_rmse": 1.560935139656067,
+          "gap": -0.3053683042526245,
+          "bias": 0.46238476037979126,
+          "corr": 0.6487178651767675
+        },
+        {
+          "depth_m": 75.0,
+          "n": 40000,
+          "rmse": 1.7030305862426758,
+          "glorys_rmse": 1.989825963973999,
+          "gap": -0.28679537773132324,
+          "bias": 0.6397157311439514,
+          "corr": 0.5448559686506467
+        },
+        {
+          "depth_m": 100.0,
+          "n": 40000,
+          "rmse": 2.3534696102142334,
+          "glorys_rmse": 2.0650277137756348,
+          "gap": 0.28844189643859863,
+          "bias": 1.364163875579834,
+          "corr": 0.49379000402050705
+        },
+        {
+          "depth_m": 125.0,
+          "n": 40000,
+          "rmse": 2.413815498352051,
+          "glorys_rmse": 1.9954534769058228,
+          "gap": 0.418362021446228,
+          "bias": 1.5288490056991577,
+          "corr": 0.5454614398474412
+        },
+        {
+          "depth_m": 150.0,
+          "n": 40000,
+          "rmse": 2.169067621231079,
+          "glorys_rmse": 1.7862452268600464,
+          "gap": 0.3828223943710327,
+          "bias": 1.0638598203659058,
+          "corr": 0.6045260606794779
+        },
+        {
+          "depth_m": 200.0,
+          "n": 40000,
+          "rmse": 1.5340193510055542,
+          "glorys_rmse": 1.146560788154602,
+          "gap": 0.38745856285095215,
+          "bias": 0.6336063742637634,
+          "corr": 0.7337784136074668
+        },
+        {
+          "depth_m": 300.0,
+          "n": 40000,
+          "rmse": 0.7544489502906799,
+          "glorys_rmse": 0.5929612517356873,
+          "gap": 0.16148769855499268,
+          "bias": 0.26894286274909973,
+          "corr": 0.8982294814237857
+        },
+        {
+          "depth_m": 500.0,
+          "n": 40000,
+          "rmse": 0.545270562171936,
+          "glorys_rmse": 0.4891960620880127,
+          "gap": 0.05607450008392334,
+          "bias": 0.28814059495925903,
+          "corr": 0.9126714134305812
+        },
+        {
+          "depth_m": 700.0,
+          "n": 40000,
+          "rmse": 0.507739782333374,
+          "glorys_rmse": 0.5380095839500427,
+          "gap": -0.0302698016166687,
+          "bias": 0.27591490745544434,
+          "corr": 0.9323515985030514
+        },
+        {
+          "depth_m": 1000.0,
+          "n": 40000,
+          "rmse": 0.5176297426223755,
+          "glorys_rmse": 0.4400390684604645,
+          "gap": 0.07759067416191101,
+          "bias": 0.31311365962028503,
+          "corr": 0.8970703908429186
+        }
+      ],
+      "note": "ARGO floats never entered training. GLORYS is the label we trained on, so its error against ARGO is the floor for any model distilled from it."
+    },
+    "products": [
+      {
+        "product": "D26",
+        "unit": "m",
+        "n": 93600,
+        "rmse": 18.13251659036977,
+        "bias": 9.085710529466118,
+        "corr": 0.8151506751611391,
+        "ref_mean": 68.43910358490268,
+        "ref_std": 25.17670849837703
+      },
+      {
+        "product": "TCHP",
+        "unit": "kJ/cm2",
+        "n": 93600,
+        "rmse": 18.239467688553805,
+        "bias": 6.160459131974659,
+        "corr": 0.8449763913468127,
+        "ref_mean": 59.70072895229177,
+        "ref_std": 28.263861947813023,
+        "thresholds": [
+          {
+            "value": 50,
+            "precision": 0.8818219756101331,
+            "recall": 0.9286876973662792,
+            "f1": 0.9046482680979601,
+            "n_reference_above": 61434
+          },
+          {
+            "value": 80,
+            "precision": 0.578683421720083,
+            "recall": 0.8943828232883425,
+            "f1": 0.702703648613177,
+            "n_reference_above": 22449
+          },
+          {
+            "value": 100,
+            "precision": 0.2693069306930693,
+            "recall": 0.6032528339083292,
+            "f1": 0.37237602677213266,
+            "n_reference_above": 6087
+          }
+        ]
+      },
+      {
+        "product": "MLD",
+        "unit": "m",
+        "n": 93600,
+        "rmse": 17.43293781910337,
+        "bias": 1.2676524568418857,
+        "corr": 0.6131681800630479,
+        "ref_mean": 45.68599266933518,
+        "ref_std": 18.787204079093655
+      }
+    ]
+  },
+  "design_decisions": [
+    {
+      "choice": "Predict the ANOMALY from local climatology, not absolute temperature",
+      "why": "Predicting absolute temperature means most of what the model must learn is the climatology itself -- that 1000 m here is always about 7.6 C. That is a lookup table, not inference, and any wobble the model added at depth made it worse than simply quoting the table.",
+      "evidence": "Skill against climatology at depth moved from -161% to about zero. Predicting zero now IS climatology, so zero is the floor."
+    },
+    {
+      "choice": "A 9x9 spatial patch, not a single pixel",
+      "why": "Thermocline depth responds to mesoscale eddies, and an eddy is a spatial structure -- a sea-level bump tens of kilometres across with a rotating current around it. One pixel cannot express that.",
+      "evidence": "Measured by patch-size ablation; a 1x1 patch is the point-only case and loses badly below the mixed layer."
+    },
+    {
+      "choice": "Learned per-depth queries attending over a shared latent",
+      "why": "The 15 depths are not 15 independent regressions -- they are one physically continuous column. Attention lets each depth read the part of the latent that matters for it while sharing the encoder.",
+      "evidence": "Produces smooth, physically ordered profiles rather than 15 unconstrained numbers."
+    },
+    {
+      "choice": "Blank whole input channels 15% of the time during training",
+      "why": "Satellites fail. A missing sensor loses an entire variable, not scattered pixels, so the dropout has to match the failure mode.",
+      "evidence": "The model still runs and returns a calibrated profile with any single input gone; losing SST costs +6.4% RMSE, everything else under 3%."
+    },
+    {
+      "choice": "No latitude or longitude as input",
+      "why": "Given coordinates the model memorises a spatial climatology and scores well without doing any surface-to-depth inference. That is a shortcut, and it inflates every number.",
+      "evidence": "Turning coordinate channels off is what made the skill-vs-climatology metric meaningful."
+    },
+    {
+      "choice": "Chronological splits, never random",
+      "why": "A random split lets the model see Tuesday and Thursday and be asked about Wednesday. That is interpolation, not prediction.",
+      "evidence": "Every held-out day falls after every training day."
+    }
+  ],
+  "differentiators": [
+    {
+      "vs": "Physics assimilation (GLORYS, the system we learn from)",
+      "them": "Solves the ocean equations and assimilates observations. Authoritative, but needs a supercomputer and runs with a delay.",
+      "us": "One forward pass, seconds on a single GPU, from satellite fields that are already public. We do not beat it -- we approximate it cheaply enough to run anywhere.",
+      "measured": "Against real ARGO floats: our RMSE 1.24 C vs the reanalysis's own 1.16 C on identical profiles."
+    },
+    {
+      "vs": "Point-wise regression on surface variables",
+      "them": "Fits temperature from the surface values at one location. Cannot see the spatial structure that sets thermocline depth.",
+      "us": "A convolutional encoder over a 9x9 window reads the gradient and the curl, which is what actually indicates isotherms have been pushed down.",
+      "measured": "Largest gains below 200 m, where inference rather than copying is required."
+    },
+    {
+      "vs": "ARGO float interpolation",
+      "them": "Interpolates between roughly 4,000 floats worldwide. In this basin that is one profile every few hundred kilometres every ten days.",
+      "us": "Every 0.25 degree cell, every day. ARGO is kept OUT of training and used only as independent validation.",
+      "measured": "40,000 co-located float profiles, all on held-out days."
+    },
+    {
+      "vs": "A standard CNN regression to 15 outputs",
+      "them": "Predicts absolute temperature at 15 depths and is scored on RMSE, which the climatology alone already largely explains.",
+      "us": "Predicts anomalies, carries its own climatology, reports skill ABOVE climatology, and ships an uncertainty estimate derived from the same perturbation it was trained against.",
+      "measured": "Skill vs climatology is reported at every depth, including where it is negative."
+    }
+  ],
+  "limitations": [
+    "We are distilled from GLORYS, so we cannot be more accurate than GLORYS. The most we can be is a fast, cheap approximation of it.",
+    "Below about 500 m the surface carries almost no information and the model correctly falls back to climatology rather than inventing signal.",
+    "We carry a systematic warm bias against ARGO that peaks in the thermocline. It is real, it is stated, and it is correctable against the float record.",
+    "The record is still partial: November and December are missing from every year, so no complete annual cycle has been seen.",
+    "Validation loss reaches its floor within about five epochs; further training overfits. More data, not more epochs, is the lever."
+  ]
+}

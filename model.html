@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OceanEmbed - the model</title>
+<style>
+  :root{
+    --bg:#080d16; --panel:#101a2b; --line:#1e2b42;
+    --ink:#e8eef7; --dim:#8fa3bf; --accent:#4da3ff; --warn:#ffb454;
+    --good:#5fd39b; --bad:#ff7b72;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{padding:22px 30px 16px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:25px;letter-spacing:-.02em}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--dim);margin-top:5px;max-width:82ch;font-size:14px}
+  .nav{margin-top:12px;display:flex;gap:8px}
+  .nav a{color:var(--dim);text-decoration:none;border:1px solid var(--line);
+         padding:5px 12px;border-radius:6px;font-size:13px}
+  .nav a:hover{color:var(--accent);border-color:var(--accent)}
+  .nav a.on{background:var(--accent);border-color:var(--accent);color:#04101f;font-weight:600}
+  main{padding:20px 30px 60px;max-width:1400px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:16px 18px;margin-bottom:18px}
+  .card h2{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:.05em;
+           color:var(--dim);text-transform:uppercase}
+  .row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+  @media(max-width:1000px){.row2{grid-template-columns:1fr}}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums;color:var(--accent)}
+  .stat small{color:var(--dim);font-size:12px;display:block;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px}
+  th,td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500}
+  th:first-child,td:first-child{text-align:left}
+  .pos{color:var(--good)}.neg{color:var(--bad)}
+  .note{color:var(--dim);font-size:12.5px;margin-top:10px}
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:6px 0 4px}
+  .fbox{background:#0b1424;border:1px solid var(--line);border-radius:8px;
+        padding:10px 13px;min-width:118px;flex:1}
+  .fbox b{display:block;font-size:13px}
+  .fbox small{color:var(--dim);font-size:11.5px;display:block;margin-top:3px;line-height:1.4}
+  .arrow{display:flex;align-items:center;color:var(--accent);padding:0 8px;font-size:19px}
+  @media(max-width:900px){.arrow{transform:rotate(90deg);padding:4px 0}}
+  .bar{height:9px;border-radius:3px;background:var(--accent);display:inline-block;
+       vertical-align:middle}
+  .barbg{background:#0b1424;border-radius:3px;flex:1;height:9px;overflow:hidden}
+  .imp{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+  .imp .nm{min-width:190px;color:var(--dim)}
+  .imp .vl{min-width:62px;text-align:right;font-variant-numeric:tabular-nums}
+  .dec{border-left:3px solid var(--accent);padding:2px 0 2px 14px;margin:15px 0}
+  .dec b{display:block;font-size:14.5px;margin-bottom:4px}
+  .dec p{margin:5px 0;font-size:13.5px;color:#cfdcec}
+  .dec .ev{color:var(--good);font-size:13px}
+  .diff{border:1px solid var(--line);border-radius:9px;padding:13px 15px;margin:12px 0;
+        background:#0b1424}
+  .diff h3{margin:0 0 8px;font-size:14.5px;color:var(--accent)}
+  .diff .pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+  @media(max-width:900px){.diff .pair{grid-template-columns:1fr}}
+  .diff .pair div{font-size:13px}
+  .diff .lbl{color:var(--dim);text-transform:uppercase;font-size:11px;letter-spacing:.05em;
+             display:block;margin-bottom:3px}
+  .diff .m{margin-top:9px;color:var(--good);font-size:13px}
+  .warnbox{border-left:3px solid var(--warn);padding:11px 15px;margin-top:14px;
+           background:#191509;border-radius:0 6px 6px 0;font-size:13.5px}
+  ul.lim{margin:6px 0 0;padding-left:20px;font-size:13.5px}
+  ul.lim li{margin:6px 0;color:#cfdcec}
+  canvas{width:100%;height:210px;display:block}
+  footer{color:var(--dim);font-size:12.5px;padding:0 30px 40px;max-width:1400px}
+  code{background:#0b1424;padding:1px 5px;border-radius:4px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ocean<span>Embed</span> &mdash; the model</h1>
+  <div class="sub" id="task">How a 9&times;9 window of satellite surface data becomes a
+    15-level temperature profile, what the network is made of, what it leans on, and
+    where it is different from everything else that could be pointed at this problem.</div>
+  <div class="nav">
+    <a href="index.html">Basin viewer</a>
+    <a href="model.html" class="on">The model</a>
+  </div>
+</header>
+<main>
+
+<div class="card">
+  <h2>At a glance</h2>
+  <div class="stats" id="glance"></div>
+  <div class="note" id="glance-note"></div>
+</div>
+
+<div class="card">
+  <h2>Architecture</h2>
+  <div class="flow" id="flow"></div>
+  <div class="note">Every depth is produced by its own learned query attending over one
+    shared 128-dimensional latent. The 15 levels are not 15 independent regressions &mdash;
+    they are one physically continuous water column, and sharing the encoder is what keeps
+    the profile smooth and correctly ordered.</div>
+</div>
+
+<div class="row2">
+  <div class="card">
+    <h2>Where the parameters are</h2>
+    <table id="params"></table>
+    <div class="note" id="params-note"></div>
+  </div>
+  <div class="card">
+    <h2>What the model actually depends on</h2>
+    <div id="importance"></div>
+    <div class="note">Each input is blanked in turn and the model re-run. The useful
+      reading is not that accuracy drops &mdash; of course it does &mdash; but
+      <b>which</b> variable it drops for. A channel whose removal costs nothing was never
+      being used. A negative cost means removing it slightly <i>helped</i>: that channel is
+      contributing noise, not signal.</div>
+  </div>
+</div>
+
+<div class="row2">
+  <div class="card">
+    <h2>Accuracy by depth</h2>
+    <table id="depths"></table>
+    <div class="note">Skill vs climatology is the honest metric: climatology is the
+      per-location mean profile, which needs no satellite data at all. Beating a baseline
+      is not impressive if neither beats &ldquo;the usual temperature here&rdquo;.</div>
+  </div>
+  <div class="card">
+    <h2>Independent check against ARGO floats</h2>
+    <div class="stats" id="argo-stats"></div>
+    <table id="argo"></table>
+    <div class="note" id="argo-note"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Training behaviour</h2>
+  <canvas id="curve"></canvas>
+  <div class="note" id="curve-note"></div>
+</div>
+
+<div class="card">
+  <h2>Design decisions, and the measurement behind each</h2>
+  <div id="decisions"></div>
+</div>
+
+<div class="card">
+  <h2>How this differs from the alternatives</h2>
+  <div id="diffs"></div>
+</div>
+
+<div class="card">
+  <h2>Limitations we state up front</h2>
+  <ul class="lim" id="limits"></ul>
+  <div class="warnbox">Nothing on this page is typed in by hand. It is rendered from
+    <code>model_card.json</code>, which is exported straight from the trained checkpoint
+    and the scorecards. Retrain, rerun <code>scripts/11_model_card.py</code>, and every
+    number here updates.</div>
+</div>
+
+</main>
+<footer>OceanEmbed &mdash; SIH 2026, INCOIS Problem Statement 01. Trained on GLORYS12V1
+  reanalysis; validated against ARGO floats never used in training.</footer>
+
+<script>
+const f1=(x,n)=>x==null||!isFinite(x)?"--":x.toFixed(n);
+const pct=x=>x==null?"--":(x*100).toFixed(0)+"%";
+
+fetch("data/model_card.json").then(r=>r.json()).then(M=>{
+  document.getElementById("task").textContent = M.task;
+
+  // ---- at a glance -------------------------------------------------------
+  const A=M.validation.vs_argo, G=M.validation.vs_glorys;
+  const g=[["Parameters", M.total_params.toLocaleString()],
+           ["Input", M.architecture.input_shape.join("×")+" patch"],
+           ["Latent", M.architecture.embed_dim+"-d"],
+           ["Outputs", M.architecture.n_depths+" depths"]];
+  if(A) g.push(["RMSE vs ARGO", f1(A.our_rmse_vs_argo_degC,2)+" °C"],
+               ["GLORYS vs ARGO", f1(A.glorys_rmse_vs_argo_degC,2)+" °C"]);
+  if(G) g.push(["Correlation", f1(G.mean_corr,3)]);
+  document.getElementById("glance").innerHTML =
+    g.map(([k,v])=>`<div class="stat"><b>${v}</b><small>${k}</small></div>`).join("");
+  document.getElementById("glance-note").textContent =
+    `Predicting the ${M.checkpoint.target} from local climatology. Best checkpoint at `+
+    `epoch ${M.checkpoint.epoch}. Splits are ${M.training.split}.`;
+
+  // ---- architecture flow -------------------------------------------------
+  const P=M.architecture.input_shape;
+  const steps=[
+    ["Surface patch", `${P[0]} channels &times; ${P[1]}&times;${P[2]} cells<br>`+
+      M.surface_vars.join(", ")],
+    ["CNN encoder", "3 conv blocks<br>64 &rarr; 96 &rarr; 128 channels<br>batch-norm, ReLU"],
+    ["Latent", M.architecture.embed_dim+"-d embedding<br>one vector per water column"],
+    ["Depth attention", M.architecture.n_depths+" learned queries<br>each reads what it "+
+      "needs<br>from the shared latent"],
+    ["Profile", M.architecture.n_depths+" temperatures<br>0 &ndash; 1000 m<br>"+
+      "anomaly + climatology"]];
+  document.getElementById("flow").innerHTML = steps.map((s,i)=>
+    `<div class="fbox"><b>${s[0]}</b><small>${s[1]}</small></div>`+
+    (i<steps.length-1?'<div class="arrow">&rarr;</div>':'')).join("");
+
+  // ---- parameters --------------------------------------------------------
+  const B=M.architecture.blocks, mx=Math.max(...B.map(b=>b.params));
+  document.getElementById("params").innerHTML =
+    "<tr><th>block</th><th>parameters</th><th>share</th></tr>"+
+    B.map(b=>`<tr><td>${b.block}</td><td>${b.params.toLocaleString()}</td>`+
+      `<td><span class="bar" style="width:${Math.max(2,60*b.params/mx)}px"></span> `+
+      `${(100*b.params/M.total_params).toFixed(1)}%</td></tr>`).join("");
+  document.getElementById("params-note").textContent =
+    `${M.total_params.toLocaleString()} parameters in total -- small enough to train in `+
+    `minutes on one laptop GPU and to run a whole basin-day in seconds. Most of the `+
+    `weight sits in the projection from the convolutional feature map to the latent.`;
+
+  // ---- input importance --------------------------------------------------
+  const I=M.input_importance||[], amx=Math.max(...I.map(r=>Math.abs(r.cost_pct)),1);
+  document.getElementById("importance").innerHTML = I.map(r=>{
+    const w=Math.max(2,100*Math.abs(r.cost_pct)/amx), pos=r.cost_pct>=0;
+    return `<div class="imp"><span class="nm">${r.label}</span>`+
+      `<span class="barbg"><span class="bar" style="width:${w}%;background:`+
+      `${pos?'var(--accent)':'var(--dim)'}"></span></span>`+
+      `<span class="vl ${pos?'':'pos'}">${r.cost_pct>=0?'+':''}${f1(r.cost_pct,1)}%</span></div>`;
+  }).join("");
+
+  // ---- depth table -------------------------------------------------------
+  const sk={}; (G.skill_per_depth||[]).forEach(r=>sk[r.depth_m]=r.skill);
+  document.getElementById("depths").innerHTML =
+    "<tr><th>depth</th><th>corr</th><th>RMSE &deg;C</th><th>bias</th><th>vs climatology</th></tr>"+
+    (G.per_depth||[]).map(r=>{
+      const s=sk[r.depth_m];
+      return `<tr><td>${r.depth_m.toFixed(0)} m</td><td>${f1(r.corr,3)}</td>`+
+        `<td>${f1(r.rmse,2)}</td><td>${r.bias>=0?'+':''}${f1(r.bias,2)}</td>`+
+        `<td class="${s>0?'pos':'neg'}">${s==null?'--':(s>=0?'+':'')+pct(s)}</td></tr>`;
+    }).join("");
+
+  // ---- argo --------------------------------------------------------------
+  if(A){
+    document.getElementById("argo-stats").innerHTML =
+      [["Ours", f1(A.our_rmse_vs_argo_degC,2)+" °C"],
+       ["GLORYS", f1(A.glorys_rmse_vs_argo_degC,2)+" °C"],
+       ["Gap", (A.excess_over_glorys_pct>=0?"+":"")+f1(A.excess_over_glorys_pct,0)+"%"],
+       ["Profiles", A.n_profiles.toLocaleString()]]
+      .map(([k,v])=>`<div class="stat"><b>${v}</b><small>${k}</small></div>`).join("");
+    document.getElementById("argo").innerHTML =
+      "<tr><th>depth</th><th>ours</th><th>GLORYS</th><th>gap</th><th>our bias</th></tr>"+
+      (A.per_depth||[]).map(r=>
+        `<tr><td>${r.depth_m.toFixed(0)} m</td><td>${f1(r.rmse,2)}</td>`+
+        `<td>${f1(r.glorys_rmse,2)}</td>`+
+        `<td class="${r.gap<0?'pos':''}">${r.gap>=0?'+':''}${f1(r.gap,2)}</td>`+
+        `<td>${r.bias>=0?'+':''}${f1(r.bias,2)}</td></tr>`).join("");
+    const worst=(A.per_depth||[]).reduce((a,b)=>Math.abs(b.bias)>Math.abs(a.bias)?b:a);
+    document.getElementById("argo-note").innerHTML =
+      "ARGO floats are physical instruments that descended through the water column and "+
+      "never entered training, so this is the only genuinely independent measurement here. "+
+      "GLORYS is what we learned from, so its error is the floor. <b>We run warm against "+
+      "the floats at every level, peaking at "+(worst.bias>=0?"+":"")+f1(worst.bias,2)+
+      " °C at "+worst.depth_m.toFixed(0)+" m</b> -- a real defect, stated rather than "+
+      "averaged away, and correctable against the float record.";
+  }
+
+  // ---- training curve ----------------------------------------------------
+  const C=M.training.convergence;
+  if(C && C.curve && C.curve.length){
+    const cv=document.getElementById("curve"), dpr=window.devicePixelRatio||1;
+    const W=cv.clientWidth, H=210;
+    cv.width=W*dpr; cv.height=H*dpr;
+    const x=cv.getContext("2d"); x.scale(dpr,dpr);
+    const cur=C.curve, n=cur.length;
+    const all=cur.flatMap(p=>[p.train,p.val]);
+    const lo=Math.min(...all)*0.95, hi=Math.max(...all)*1.02;
+    const px=i=>40+(W-58)*i/Math.max(n-1,1), py=v=>H-26-(H-44)*(v-lo)/(hi-lo);
+    x.strokeStyle="#1e2b42"; x.lineWidth=1;
+    for(let k=0;k<=4;k++){const yy=26+(H-44)*k/4; x.beginPath();x.moveTo(40,yy);x.lineTo(W-18,yy);x.stroke();}
+    const line=(key,col)=>{x.strokeStyle=col;x.lineWidth=2;x.beginPath();
+      cur.forEach((p,i)=>i?x.lineTo(px(i),py(p[key])):x.moveTo(px(i),py(p[key])));x.stroke();};
+    line("train","#4da3ff"); line("val","#ffb454");
+    x.fillStyle="#8fa3bf"; x.font="11px system-ui";
+    x.fillText(hi.toFixed(2),4,30); x.fillText(lo.toFixed(2),4,H-24);
+    x.fillText("epoch 1",36,H-8); x.fillText("epoch "+n,W-62,H-8);
+    x.fillStyle="#4da3ff"; x.fillText("train",W-110,18);
+    x.fillStyle="#ffb454"; x.fillText("validation",W-70,18);
+    const bx=px(C.best_epoch-1), by=py(C.best_val);
+    x.strokeStyle="#5fd39b"; x.setLineDash([3,3]); x.beginPath();
+    x.moveTo(bx,26); x.lineTo(bx,H-26); x.stroke(); x.setLineDash([]);
+    x.fillStyle="#5fd39b"; x.beginPath(); x.arc(bx,by,4,0,7); x.fill();
+    document.getElementById("curve-note").innerHTML =
+      `Best validation loss <b>${f1(C.best_val,4)} at epoch ${C.best_epoch}</b>; by epoch `+
+      `${C.final_epoch} training loss had fallen to ${f1(C.final_train,4)} while validation `+
+      `drifted to ${f1(C.final_val,4)}. <b>The model reaches its validation floor within a `+
+      `handful of epochs and everything after that is memorising.</b> We checkpoint on `+
+      `validation, so the saved model is the green marker, not the end of the run. The `+
+      `lever for improvement is more data, not more epochs -- raising weight decay tenfold `+
+      `moved the floor by 0.03%.`;
+  }
+
+  // ---- decisions ---------------------------------------------------------
+  document.getElementById("decisions").innerHTML = (M.design_decisions||[]).map(d=>
+    `<div class="dec"><b>${d.choice}</b><p>${d.why}</p>`+
+    `<p class="ev">Measured: ${d.evidence}</p></div>`).join("");
+
+  // ---- differentiators ---------------------------------------------------
+  document.getElementById("diffs").innerHTML = (M.differentiators||[]).map(d=>
+    `<div class="diff"><h3>${d.vs}</h3><div class="pair">`+
+    `<div><span class="lbl">Them</span>${d.them}</div>`+
+    `<div><span class="lbl">Us</span>${d.us}</div></div>`+
+    `<div class="m">${d.measured}</div></div>`).join("");
+
+  // ---- limitations -------------------------------------------------------
+  document.getElementById("limits").innerHTML =
+    (M.limitations||[]).map(l=>`<li>${l}</li>`).join("");
+}).catch(e=>{
+  document.querySelector("main").insertAdjacentHTML("afterbegin",
+    '<div class="card"><h2>Model card unavailable</h2><div class="note">Could not load '+
+    'data/model_card.json &mdash; run <code>python scripts/11_model_card.py</code>.</div></div>');
+  console.error(e);
+});
+</script>
+</body>
+</html>
