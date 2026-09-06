@@ -9,6 +9,15 @@
 > period is interpolation, not extrapolation. That needs continuous years.
 > Laptop 1 already collected 2022-01 to 2022-10 this way.
 
+**Your months: all twelve months of **2023** (2023-01 through 2023-12)**
+
+> **Changed from the original plan.** We first assigned four scattered months per
+> year. Training on 2022 showed why that is wrong: the holdout ends up being a
+> season the model never saw, so it has to extrapolate, and skill drops. What
+> fixes it is the SAME SEASON appearing in more than one year -- then the test
+> period is interpolation, not extrapolation. That needs continuous years.
+> Laptop 1 already collected 2022-01 to 2022-10 this way.
+
 
 You download those months, harmonize them yourself, and upload ONE file per
 month. Nothing else moves between laptops.
