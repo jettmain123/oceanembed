@@ -102,11 +102,6 @@
       <button data-l="3">Uncertainty</button>
       <button data-l="4">RI risk</button>
     </div>
-    <div class="tabs" id="modes" style="margin-top:7px">
-      <button data-m="0" class="on">Predicted</button>
-      <button data-m="1">Reference (GLORYS)</button>
-      <button data-m="2">Difference</button>
-    </div>
     <div id="map" style="margin-top:11px"></div>
     <div class="bar-row"><span id="lo"></span><div class="bar" id="cbar"></div><span id="hi"></span></div>
 
@@ -244,7 +239,11 @@ const BASEMAPS={
          ref: ESRI+"/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}"},
 };
 
-let IX=null, DAY=null, PROD=null, dayIdx=-1, mode=0, layer='T', pick=null, map=null, ready=false;
+// mode is pinned to 0: the map shows OUR reconstruction only. The GLORYS
+// reference is still loaded, because the point readout and the profile plot
+// compare against it -- it is just no longer a selectable map view.
+const mode=0;
+let IX=null, DAY=null, PROD=null, dayIdx=-1, layer='T', pick=null, map=null, ready=false;
 let cv=document.createElement("canvas"), lastLo=0, lastHi=1;
 const $=id=>document.getElementById(id);
 
@@ -685,22 +684,7 @@ for(const b of document.querySelectorAll("#layers button")) b.onclick=()=>{
   const off=(layer!=="T");
   $("depth").disabled=off;
   $("depth").parentElement.style.opacity=off?.4:1;
-  // there is no GLORYS reference for uncertainty or risk -- they are ours alone
-  const predOnly=(layer==="3"||layer==="4");
-  document.querySelectorAll("#modes button").forEach((x,i)=>{
-    x.disabled=predOnly&&i>0;
-    x.style.opacity=(predOnly&&i>0)?.35:1;
-  });
-  if(predOnly){
-    document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));
-    document.querySelector('#modes button[data-m="0"]').classList.add("on");
-    mode=0;
-  }
   refresh();
-};
-for(const b of document.querySelectorAll("#modes button")) b.onclick=()=>{
-  document.querySelectorAll("#modes button").forEach(x=>x.classList.remove("on"));
-  b.classList.add("on"); mode=+b.dataset.m; refresh();
 };
 loadIndex();
 </script>
