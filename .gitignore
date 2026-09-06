@@ -23,3 +23,8 @@ outputs/*.json
 !outputs/synthetic/
 outputs/synthetic/*.pt
 .DS_Store
+
+# transient run logs
+outputs/*_live.log
+outputs/tunnel.log
+outputs/train_live_crashed.log

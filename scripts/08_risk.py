@@ -72,7 +72,12 @@ def day_fields(ds, cfg, pred_, it, mc=12):
         extra[:, 3] = np.cos(2 * np.pi * t.timetuple().tm_yday / 365.25)
         patches = np.concatenate([patches, extra], axis=1)
 
-    mean, std = pred_.predict_mc(patches, n=mc)
+    # meta is REQUIRED for an anomaly-trained checkpoint: the model returns a
+    # departure from the local climatology and cannot place it without knowing
+    # which cell and day each row came from.
+    meta = np.stack([np.full(iy.size, it, np.float64),
+                     lat[iy + half], lon[ix + half]], axis=1)
+    mean, std = pred_.predict_mc(patches, n=mc, meta=meta)
     T[iy + half, ix + half] = tchp(mean, depths)
     D[iy + half, ix + half] = d26(mean, depths)
     # spread at 100 m -- the thermocline, where the model is most input-sensitive
@@ -97,7 +102,16 @@ def main() -> None:
     lat = np.asarray(ds["lat"].values, np.float32)
     lon = np.asarray(ds["lon"].values, np.float32)
     times = np.asarray(ds["time"].values)
-    n = times.size if args.max_days is None else min(args.max_days, times.size)
+    # Take the MOST RECENT days, not the first. The last block is the holdout,
+    # so the demonstration runs on days the model never trained on -- and in this
+    # basin it is also the post-monsoon cyclone season, when there is something
+    # to show. Starting from day 0 lands in January, which is both in-sample and
+    # the quietest part of the year.
+    if args.max_days is None:
+        day_idx = list(range(times.size))
+    else:
+        day_idx = list(range(max(0, times.size - args.max_days), times.size))
+    n = len(day_idx)
 
     print(pred_)
     print(f"\n{DISCLAIMER}\n")
@@ -106,10 +120,10 @@ def main() -> None:
     # day -- the tropical Indian Ocean simply is that warm.
     print("  building the TCHP climatology (pass 1 of 2)...")
     fields = []
-    for it in range(n):
+    for j, it in enumerate(day_idx):
         fields.append(day_fields(ds, cfg, pred_, it, mc=args.mc))
-        if (it + 1) % 10 == 0:
-            print(f"    {it + 1}/{n} days")
+        if (j + 1) % 10 == 0:
+            print(f"    {j + 1}/{n} days")
     clim = np.nanmean(np.stack([f[0] for f in fields]), axis=0)
     print("  climatology built; scoring days against it (pass 2 of 2)\n")
 
@@ -118,9 +132,9 @@ def main() -> None:
     print("-" * 88)
 
     daily, all_alerts = [], []
-    for it in range(n):
+    for j, it in enumerate(day_idx):
         date = str(np.datetime64(times[it], "D"))
-        T, D, U = fields[it]
+        T, D, U = fields[j]
         A = T - clim                      # anomaly against the local norm
         R = risk_index(T, U, tchp_anomaly=A)
         alerts = build_alerts(date, R, T, U, lat, lon)

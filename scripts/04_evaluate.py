@@ -119,6 +119,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--backend", choices=["auto", "torch", "numpy"], default="auto")
     ap.add_argument("--depth-map", type=float, default=100.0)
+    ap.add_argument("--no-baseline", action="store_true",
+                    help="omit the RF baseline from the figures and the printed "
+                         "comparison; the reference points that matter are GLORYS "
+                         "and ARGO, not a baseline we built ourselves")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -175,7 +179,7 @@ def main() -> None:
     # that section from the file even though it printed to the terminal fine.
     spath.write_text(json.dumps(card, indent=2), encoding="utf-8")
 
-    base = load_card(resolve(cfg["paths"]["baseline_scorecard"]))
+    base = None if args.no_baseline else load_card(resolve(cfg["paths"]["baseline_scorecard"]))
     if base:
         print("\nOceanEmbed vs point-only RF baseline:")
         print(compare_table(card, base))

@@ -171,7 +171,19 @@ def main() -> None:
             sched.step()
             model.eval()
             with torch.no_grad():
-                vl = float(weighted_mse(model(va_x), va_y, wt).detach())
+                # Batched. Pushing the whole validation split through in one
+                # forward pass allocates activations for every sample at once --
+                # with 79k samples that is several GB for a single conv layer,
+                # which thrashed a 12 GB card once per epoch. weighted_mse is a
+                # mean over samples, so a size-weighted average of batches is
+                # exactly the same number.
+                vs, vn = 0.0, 0
+                vb = batch * 4
+                for s0 in range(0, va_x.shape[0], vb):
+                    xb, yb = va_x[s0:s0 + vb], va_y[s0:s0 + vb]
+                    vs += float(weighted_mse(model(xb), yb, wt).detach()) * xb.shape[0]
+                    vn += xb.shape[0]
+                vl = vs / max(vn, 1)
             tr = tot / max(seen, 1)
             history.append({"epoch": ep, "train_loss": tr, "val_loss": vl})
             flag = ""

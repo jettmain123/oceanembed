@@ -1,0 +1,51 @@
+backend=torch (torch 2.14.0+cu130)
+train (376800, 7, 9, 9)  val (79200, 7, 9, 9)  channels 7  patch 9  depths 15
+epochs 40  batch 256  lr 0.0008  wd 0.01  encoder cnn  channel_dropout 0.15
+target: anomaly  (predicting the anomaly from the local climatology)
+device: cuda -> NVIDIA GeForce RTX 4080 Laptop GPU (12.9 GB)
+model: cnn encoder, 775,873 parameters
+  epoch   1/40  train 0.56185  val 0.79168  <- best
+  epoch   2/40  train 0.48636  val 0.76924  <- best
+  epoch   3/40  train 0.44740  val 0.82940
+  epoch   4/40  train 0.42062  val 0.86297
+  epoch   5/40  train 0.39912  val 0.75619  <- best
+  epoch   6/40  train 0.38221  val 0.81545
+  epoch   7/40  train 0.36575  val 0.85907
+  epoch   8/40  train 0.35062  val 0.79295
+  epoch   9/40  train 0.31709  val 0.78008
+  epoch  10/40  train 0.29403  val 0.83212
+  epoch  11/40  train 0.27790  val 0.79875
+  epoch  12/40  train 0.26587  val 0.83482
+  epoch  13/40  train 0.25663  val 0.84402
+  epoch  14/40  train 0.24911  val 0.80368
+  epoch  15/40  train 0.24205  val 0.80161
+  epoch  16/40  train 0.23455  val 0.81343
+  epoch  17/40  train 0.22928  val 0.77990
+  epoch  18/40  train 0.22396  val 0.83027
+  epoch  19/40  train 0.21877  val 0.83457
+  epoch  20/40  train 0.21345  val 0.82876
+  epoch  21/40  train 0.20866  val 0.85137
+  epoch  22/40  train 0.20515  val 0.83930
+  epoch  23/40  train 0.20202  val 0.84766
+  epoch  24/40  train 0.19829  val 0.81571
+  epoch  25/40  train 0.19464  val 0.81140
+  epoch  26/40  train 0.19094  val 0.80691
+  epoch  27/40  train 0.18892  val 0.81898
+  epoch  28/40  train 0.18688  val 0.81240
+  epoch  29/40  train 0.18391  val 0.82668
+  epoch  30/40  train 0.18229  val 0.84328
+  epoch  31/40  train 0.17923  val 0.81511
+  epoch  32/40  train 0.17830  val 0.82647
+  epoch  33/40  train 0.17746  val 0.82344
+  epoch  34/40  train 0.17571  val 0.83020
+  epoch  35/40  train 0.17446  val 0.83160
+  epoch  36/40  train 0.17338  val 0.82864
+  epoch  37/40  train 0.17331  val 0.82988
+  epoch  38/40  train 0.17202  val 0.83557
+  epoch  39/40  train 0.17207  val 0.83050
+  epoch  40/40  train 0.17153  val 0.83060
+
+best val loss : 0.75619
+trained in    : 313.3 s
+checkpoint    : C:\Users\preet\OneDrive\Desktop\sih2026\oceanembed\outputs\oceanembed.pt
+history       : C:\Users\preet\OneDrive\Desktop\sih2026\oceanembed\outputs\train_history.json

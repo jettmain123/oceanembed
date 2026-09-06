@@ -80,7 +80,15 @@ def main() -> None:
     land = np.asarray(ds["land_mask"].values) > 0.5
     ny, nx, nz = lat.size, lon.size, depths.size
     times = np.asarray(ds["time"].values)
-    n_days = times.size if args.max_days is None else min(args.max_days, times.size)
+    # Take the MOST RECENT days. The last block is the holdout, so the viewer
+    # shows days the model never trained on -- and in this basin that is also the
+    # post-monsoon cyclone season. Starting from day 0 lands in January 2022,
+    # which is both in-sample and, for the first 90 days, missing wind entirely.
+    if args.max_days is None:
+        day_idx = list(range(times.size))
+    else:
+        day_idx = list(range(max(0, times.size - args.max_days), times.size))
+    n_days = len(day_idx)
 
     dom = cfg["domain"]
     lat_n = (lat - dom["lat_min"]) / (dom["lat_max"] - dom["lat_min"]) * 2 - 1
@@ -90,7 +98,7 @@ def main() -> None:
     dates = []
     risk_days = []      # TCHP per day, to build the climatology the risk rule needs
     pending = []        # (path, prod array) -- risk is filled in after the climatology
-    for it in range(n_days):
+    for seq, it in enumerate(day_idx):
         if args.index_only:
             dates.append(str(np.datetime64(times[it], "D")))
             continue
@@ -112,7 +120,12 @@ def main() -> None:
                 extra[:, 2] = np.sin(2 * np.pi * d.timetuple().tm_yday / 365.25)
                 extra[:, 3] = np.cos(2 * np.pi * d.timetuple().tm_yday / 365.25)
                 patches = np.concatenate([patches, extra], axis=1)
-            y, mc_std = pred_.predict_mc(patches, n=args.mc)                # (n,nz) each
+            # meta is REQUIRED for an anomaly-trained checkpoint -- the model
+            # returns a departure from the local climatology and cannot place it
+            # without knowing which cell and day each row came from.
+            meta = np.stack([np.full(iy.size, it, np.float64),
+                             lat[iy + half], lon[ix + half]], axis=1)
+            y, mc_std = pred_.predict_mc(patches, n=args.mc, meta=meta)      # (n,nz) each
             pred[:, iy + half, ix + half] = y.T
 
         # Operational products, computed per cell from the SAME profiles. This is
@@ -135,10 +148,12 @@ def main() -> None:
         risk_days.append(prod[0, 0].copy())
 
         stack = np.stack([encode(pred), encode(ref)])                      # (2,nz,ny,nx)
-        pending.append((out_dir / f"day_{it:03d}.bin", stack, prod))
+        # named by POSITION in the exported series, not by absolute day index --
+        # the viewer fetches day_000.bin upward and pairs them with index.json
+        pending.append((out_dir / f"day_{seq:03d}.bin", stack, prod))
         dates.append(str(np.datetime64(times[it], "D")))
         if (it + 1) % 10 == 0 or it == n_days - 1:
-            print(f"  {it + 1}/{n_days} days")
+            print(f"  {seq + 1}/{n_days} days")
 
     # Second pass: the risk rule needs to know what is NORMAL at each location,
     # because an absolute TCHP threshold flags nearly the whole basin every day.
