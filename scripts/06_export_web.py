@@ -52,6 +52,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data")
     ap.add_argument("--max-days", type=int, default=None)
+    ap.add_argument("--stride", type=int, default=1,
+                    help="keep every Nth day across the WHOLE record, so the viewer "
+                         "can range over every year rather than one recent month")
+    ap.add_argument("--dense-tail", type=int, default=0,
+                    help="always keep the last N days at full daily cadence, on top "
+                         "of the stride -- day-by-day detail where events are")
     ap.add_argument("--mc", type=int, default=10,
                     help="Monte-Carlo passes for the uncertainty layer")
     ap.add_argument("--index-only", action="store_true",
@@ -80,14 +86,38 @@ def main() -> None:
     land = np.asarray(ds["land_mask"].values) > 0.5
     ny, nx, nz = lat.size, lon.size, depths.size
     times = np.asarray(ds["time"].values)
-    # Take the MOST RECENT days. The last block is the holdout, so the viewer
-    # shows days the model never trained on -- and in this basin that is also the
-    # post-monsoon cyclone season. Starting from day 0 lands in January 2022,
-    # which is both in-sample and, for the first 90 days, missing wind entirely.
-    if args.max_days is None:
-        day_idx = list(range(times.size))
-    else:
-        day_idx = list(range(max(0, times.size - args.max_days), times.size))
+    # Which days end up in the viewer.
+    #
+    #   --stride N       every Nth day over the whole record, so the date control
+    #                    spans every year we hold rather than one recent month
+    #   --dense-tail M   plus the last M days at full daily cadence, because that
+    #                    is where the cyclone season and the holdout live
+    #   --max-days K     hard cap, keeping the most recent K of whatever survives
+    #
+    # Days whose surface stack is entirely missing are dropped rather than
+    # exported blank: 90 days of Q1 2022 have no wind at all, and a date the
+    # viewer cannot draw is worse than a date it does not offer.
+    keep = set(range(0, times.size, max(1, args.stride)))
+    if args.dense_tail:
+        keep |= set(range(max(0, times.size - args.dense_tail), times.size))
+    day_idx = sorted(keep)
+    if args.max_days:
+        day_idx = day_idx[-args.max_days:]
+
+    usable = []
+    for it in day_idx:
+        ok = True
+        for v in svars:
+            a = ds[v].isel(time=it).values
+            if not np.isfinite(a).any():
+                ok = False
+                break
+        if ok:
+            usable.append(it)
+    dropped = len(day_idx) - len(usable)
+    if dropped:
+        print(f"  dropping {dropped} day(s) with a fully missing surface variable")
+    day_idx = usable
     n_days = len(day_idx)
 
     dom = cfg["domain"]
