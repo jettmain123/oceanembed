@@ -71,7 +71,6 @@ def main() -> None:
     # ---- which inputs the model actually leans on -------------------------
     inputs = []
     if rob:
-        base = rob["baseline"]["mean_rmse"]
         pretty = {"sst": "Sea surface temperature", "sss": "Sea surface salinity",
                   "sla": "Sea level anomaly", "ucur": "Surface current, east",
                   "vcur": "Surface current, north", "uwind": "Surface wind, east",

@@ -822,7 +822,6 @@ RUN_HISTORY = [
 def train_days_now(cfg):
     """How many days the current run actually trained on, from the splitter."""
     try:
-        import pandas as pd
         import xarray as xr
 
         from oceanembed.dataset import split_train_val_argo
@@ -876,7 +875,6 @@ def main() -> None:
     out = Path(args.out) if args.out else out_dir / "OceanEmbed_Progress_Report.pdf"
 
     card = load(resolve(cfg["paths"]["scorecard"]))
-    base = load(resolve(cfg["paths"]["baseline_scorecard"]))
     prod = load(out_dir / "products_scorecard.json")
     rob = load(out_dir / "sensor_robustness.json")
     abl = load(out_dir / "patch_ablation.json")

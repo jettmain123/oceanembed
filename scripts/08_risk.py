@@ -32,8 +32,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from oceanembed import ensure_dirs, load_config, resolve
 from oceanembed.inference import Predictor
 from oceanembed.products import d26, tchp
-from oceanembed.risk import (DISCLAIMER, TCHP_HIGH, build_alerts, coastal_exposure,
-                             risk_index)
+from oceanembed.risk import DISCLAIMER, TCHP_HIGH, build_alerts, risk_index
 
 LEVELS = ["LOW", "WATCH", "ELEVATED", "HIGH"]
 

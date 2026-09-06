@@ -155,7 +155,6 @@ def _fill_edges(da: xr.DataArray, dim: str, direction: str = "both") -> xr.DataA
 
 def kelvin_to_celsius(da: xr.DataArray) -> xr.DataArray:
     """Convert only if the values actually look like Kelvin (OSTIA SST does)."""
-    finite = np.isfinite(da.values) if da.size < 5_000_000 else np.isfinite(da.values[:1])
     sample = da.values[np.isfinite(da.values)] if da.size < 5_000_000 else da.values[0]
     med = float(np.nanmedian(sample)) if np.size(sample) else np.nan
     if np.isfinite(med) and med > 100.0:
@@ -317,7 +316,7 @@ def harmonize_from_cube(cube: xr.Dataset, cfg: dict | None = None, verbose: bool
 
 
 def missing_report(ds: xr.Dataset, cfg: dict | None = None) -> dict[str, float]:
-    """Percent of OCEAN cells that are NaN, per variable. Goes into DATA_SOURCES.md."""
+    """Percent of OCEAN cells that are NaN, per variable."""
     cfg = cfg or load_config()
     ocean = ds["land_mask"] < 0.5
     rep = {}

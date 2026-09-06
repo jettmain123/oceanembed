@@ -4,7 +4,7 @@
 #   bash scripts/download/download_month.sh 2022-01
 #
 # The last day of the month is worked out for you. ARGO is NOT here -- it comes
-# from the INCOIS web interface, see PERSON1_DATA.md.
+# from the INCOIS Live Access Server web interface.
 #
 # Dataset ids are the REPROCESSED / multi-year streams. That is deliberate: the
 # near-real-time streams do not reach back to 2022 (OSTIA NRT starts 2024-01-17,

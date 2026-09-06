@@ -139,7 +139,7 @@ def main() -> None:
     print(f"\ncomputing derived layers on {idx.size} days spread over "
           f"{times[0]} .. {times[-1]}\n")
 
-    keep, rows_pred, rows_ref = [], [], []
+    keep = []
     for it in idx:
         sss = np.asarray(ds["sss"].isel(time=int(it)).values, np.float32)
         pf = predict_day(pred_, ds, int(it), cfg, svars, P, land, lat, lon)

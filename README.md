@@ -142,7 +142,7 @@ The field-of-view ablation is the result that matters most: with identical
 samples and only the patch size changed, going from a 1x1 patch (centre cell
 only) to 9x9 cuts mean RMSE by 48% and thermocline RMSE by 58%. That isolates the
 spatial contribution cleanly, which a CNN-vs-RandomForest comparison cannot.
-See `EXPERIMENTS.md`.
+Rerun it with `python scripts/03c_patch_ablation.py`.
 
 Two honest points to keep in any write-up:
 
@@ -156,5 +156,6 @@ Two honest points to keep in any write-up:
 
 Numbers vary by roughly +/-0.01 degC between runs even with the seed fixed, so
 quote your own `outputs/scorecard.json`. Full detail there, plus three figures:
-`skill_vs_depth.png`, `example_profiles.png`, `spatial_map.png`. See
-`FINAL_PLAN.md` for roles and the timeline, `EXPERIMENTS.md` for the ablations.
+`skill_vs_depth.png`, `example_profiles.png`, `spatial_map.png`. For everything
+in one document, run `python scripts/09_report.py` -- it regenerates the full
+validation report from whatever is currently on disk.

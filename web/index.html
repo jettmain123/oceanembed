@@ -194,8 +194,6 @@ const VIRIDIS=[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],
   [31,158,137],[53,183,121],[109,205,89],[180,222,44],[253,231,37]];
 const HEATU=[[13,21,34],[40,60,90],[80,110,140],[150,160,120],[230,180,70],[255,120,60]];
 const RISKC=[[30,48,74],[70,110,150],[230,180,70],[255,90,70]];   // LOW WATCH ELEVATED HIGH
-const DIVERGE=[[33,102,172],[103,169,207],[209,229,240],[247,247,247],
-  [253,219,199],[239,138,98],[178,24,43]];
 function ramp(t,tbl){
   t=Math.max(0,Math.min(1,t));
   const x=t*(tbl.length-1), i=Math.floor(x), f=x-i;
@@ -229,10 +227,8 @@ const BASEMAPS={
          ref: ESRI+"/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}"},
 };
 
-// mode is pinned to 0: the map shows OUR reconstruction only. The GLORYS
-// reference is still loaded, because the point readout and the profile plot
-// compare against it -- it is just no longer a selectable map view.
-const mode=0;
+// The map draws OUR reconstruction only. The GLORYS reference is still loaded,
+// because the point readout and the profile plot compare against it.
 let IX=null, DAY=null, PROD=null, dayIdx=-1, layer='T', pick=null, map=null, ready=false;
 let cv=document.createElement("canvas"), lastLo=0, lastHi=1;
 const $=id=>document.getElementById(id);
@@ -293,8 +289,7 @@ function renderCanvas(){
   const isHab=!isT && k>=(IX.products.fisheries_from??99);
   const get=(w,y,x)=>isT?val(w,z,y,x):pval(w,k,y,x);
   for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
-    let v;
-    if(mode===2){ v=get(0,y,x)-get(1,y,x); } else v=get(mode,y,x);
+    const v=get(0,y,x);
     buf[y*nx+x]=v;
     if(isFinite(v)){ if(v<lo)lo=v; if(v>hi)hi=v; }
   }
@@ -302,29 +297,27 @@ function renderCanvas(){
   // a suitability score is absolute: 0.4 means the same thing on every day.
   // Autoscaling would stretch a poor day to look like a good one.
   if(isHab && +layer<9){ lo=0; hi=1; }
-  if(mode===2){ const m=Math.max(Math.abs(lo),Math.abs(hi))||1; lo=-m; hi=m; }
   for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
     // canvas row 0 must be the NORTH edge; lat index 0 is the south
     const v=buf[y*nx+x], o=((ny-1-y)*nx+x)*4;
     if(!isFinite(v)){ img.data[o+3]=0; continue; }   // transparent: basemap shows through
     let c;
-    if(mode!==2 && layer==="4") c=RISKC[Math.max(0,Math.min(3,Math.round(v)))];
-    else if(mode!==2 && layer==="3") c=ramp((v-lo)/(hi-lo||1), HEATU);
-    else if(mode!==2 && isHab) c=ramp((v-lo)/(hi-lo||1), HABITAT);
-    else c=ramp((v-lo)/(hi-lo||1), mode===2?DIVERGE:VIRIDIS);
+    if(layer==="4") c=RISKC[Math.max(0,Math.min(3,Math.round(v)))];
+    else if(layer==="3") c=ramp((v-lo)/(hi-lo||1), HEATU);
+    else if(isHab) c=ramp((v-lo)/(hi-lo||1), HABITAT);
+    else c=ramp((v-lo)/(hi-lo||1), VIRIDIS);
     img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;
   }
   ctx.putImageData(img,0,0);
   lastLo=lo; lastHi=hi;
-  let u=(isT?" °C":" "+IX.products.units[k])+(mode===2?" diff":"");
-  if(!isT&&k===4&&mode!==2){ u=""; $("lo").textContent="LOW"; $("hi").textContent="HIGH"; }
-  if(!(!isT&&k===4&&mode!==2)){
+  let u=isT?" °C":" "+IX.products.units[k];
+  if(!isT&&k===4){ u=""; $("lo").textContent="LOW"; $("hi").textContent="HIGH"; }
+  else {
     $("lo").textContent=lo.toFixed(1)+u;
     $("hi").textContent=hi.toFixed(1)+u;
   }
   $("cbar").style.background=cssRamp(
-      mode===2?DIVERGE: layer==="4"?RISKC : layer==="3"?HEATU
-      : isHab?HABITAT : VIRIDIS);
+      layer==="4"?RISKC : layer==="3"?HEATU : isHab?HABITAT : VIRIDIS);
   $("depthv").textContent=IX.depths[z].toFixed(0)+" m";
   $("datev").textContent=IX.dates[dayIdx];
   return cv.toDataURL();

@@ -24,7 +24,5 @@ outputs/*.json
 outputs/synthetic/*.pt
 .DS_Store
 
-# transient run logs
-outputs/*_live.log
-outputs/tunnel.log
-outputs/train_live_crashed.log
+# transient run logs -- every log under outputs/ is a run artefact
+outputs/*.log

@@ -81,7 +81,6 @@ def main() -> None:
     P = int(cfg["patch"]["size"])
     half = P // 2
     add_coords = bool(cfg["patch"].get("add_coords", True))
-    depths = np.asarray(ds["depth"].values, dtype=np.float32)
     lat = np.asarray(ds["lat"].values, dtype=np.float32)
     lon = np.asarray(ds["lon"].values, dtype=np.float32)
     land = np.asarray(ds["land_mask"].values) > 0.5

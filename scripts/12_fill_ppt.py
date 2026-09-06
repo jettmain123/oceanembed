@@ -23,11 +23,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
-from pptx.util import Emu, Inches, Pt
+from pptx.util import Inches, Pt
 
 from oceanembed import load_config, resolve
 
@@ -144,14 +143,11 @@ def main() -> None:
     fish = load(out_dir / "fisheries_scorecard.json")
     rob = load(out_dir / "sensor_robustness.json")
     mc = load(out_dir / "model_card.json")
-    risk = load(out_dir / "risk_summary.json")
 
     A = argo or {}
     ours = A.get("our_rmse_vs_argo_degC", float("nan"))
     glo = A.get("glorys_rmse_vs_argo_degC", float("nan"))
     gappct = A.get("excess_over_glorys_pct", float("nan"))
-    corr = card["mean_corr"] if card else float("nan")
-    skill = 100 * card["vs_climatology"]["mean_skill_vs_clim"] if card else float("nan")
     nhold = card["holdout"]["n_profiles"] if card else 0
     params = mc["total_params"] if mc else 0
 

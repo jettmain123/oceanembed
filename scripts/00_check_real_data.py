@@ -117,7 +117,7 @@ def check_product(folder, canon_list, cfg, root):
     if covers:
         say(OK, "covers the project domain (5-30N, 45-105E)")
     else:
-        say(WARN, f"does NOT fully cover 5-30N/45-105E -- harmonize will leave NaN at the edges")
+        say(WARN, "does NOT fully cover 5-30N/45-105E -- harmonize will leave NaN at the edges")
     if lon.max() > 180:
         say(WARN, "longitudes look like 0-360; harmonize converts them, just be aware")
 

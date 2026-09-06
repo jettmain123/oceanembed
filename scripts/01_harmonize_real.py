@@ -125,7 +125,7 @@ def main() -> None:
 
     print(f"\nwrote {out}  ({out.stat().st_size / 1e6:.1f} MB)")
     print(ds)
-    print("\nmissing (%% of ocean cells) -- record these in DATA_SOURCES.md:")
+    print("\nmissing (%% of ocean cells):")
     for k, v in missing_report(ds, cfg).items():
         print(f"  {k:6s} {v:6.2f}%")
 
